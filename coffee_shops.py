@@ -96,11 +96,9 @@ class CoffeeShopReviewManager:
             if not self.db:
                 return []
             
+            # Simplified query without ordering to avoid index requirement
             reviews_ref = self.db.collection('coffeeShopsReviews')
-            query = (reviews_ref
-                    .where('reviewedBy', '==', user_id)
-                    .order_by('createdAt', direction='DESCENDING')
-                    .limit(limit))
+            query = reviews_ref.where('reviewedBy', '==', user_id).limit(limit)
             
             docs = query.stream()
             reviews = []
@@ -108,6 +106,9 @@ class CoffeeShopReviewManager:
             for doc in docs:
                 review = doc.to_dict()
                 reviews.append(review)
+            
+            # Sort in Python instead of Firestore to avoid index requirement
+            reviews.sort(key=lambda x: x.get('createdAt', datetime.now()), reverse=True)
             
             return reviews
             
@@ -121,11 +122,9 @@ class CoffeeShopReviewManager:
             if not self.db:
                 return []
             
+            # Simplified query without ordering to avoid index requirement
             reviews_ref = self.db.collection('coffeeShopsReviews')
-            query = (reviews_ref
-                    .where('isPublic', '==', True)
-                    .order_by('createdAt', direction='DESCENDING')
-                    .limit(limit))
+            query = reviews_ref.where('isPublic', '==', True).limit(limit)
             
             docs = query.stream()
             reviews = []
@@ -133,6 +132,9 @@ class CoffeeShopReviewManager:
             for doc in docs:
                 review = doc.to_dict()
                 reviews.append(review)
+            
+            # Sort in Python instead of Firestore to avoid index requirement
+            reviews.sort(key=lambda x: x.get('createdAt', datetime.now()), reverse=True)
             
             return reviews
             
