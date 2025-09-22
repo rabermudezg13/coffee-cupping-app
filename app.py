@@ -10,111 +10,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for responsive design
+# Simple CSS
 st.markdown("""
 <style>
-/* Main styling */
-.main > div {
-    padding-top: 2rem;
-    background-color: #fafafa;
-}
-
-/* Coffee theme colors */
 :root {
     --coffee-brown: #8B4513;
-    --coffee-light: #D2B48C;
-    --coffee-cream: #F5DEB3;
-    --text-dark: #2c3e50;
-    --text-medium: #34495e;
 }
-
-/* Global text styling for better visibility */
-.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-    color: var(--text-dark) !important;
-}
-
-/* Button styling */
 .stButton > button {
-    background: linear-gradient(90deg, var(--coffee-brown), var(--coffee-light));
-    color: white !important;
-    border: none;
-    border-radius: 10px;
-    font-weight: bold;
-    transition: all 0.3s ease;
-}
-
-.stButton > button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-/* Input field text */
-.stTextInput > div > div > input {
-    border-radius: 10px;
-    border: 2px solid #e0e0e0;
-    transition: border-color 0.3s ease;
-    color: var(--text-dark) !important;
-    background-color: white !important;
-}
-
-.stTextInput > div > div > input:focus {
-    border-color: var(--coffee-brown);
-}
-
-/* Success/Error message styling */
-.stSuccess {
-    background-color: #d4edda !important;
-    border: 1px solid #c3e6cb !important;
-    border-radius: 10px !important;
-    color: #155724 !important;
-    font-weight: bold !important;
-    padding: 1rem !important;
-}
-
-.stError {
-    background-color: #f8d7da !important;
-    border: 1px solid #f5c6cb !important;
-    border-radius: 10px !important;
-    color: #721c24 !important;
-    font-weight: bold !important;
-    padding: 1rem !important;
-}
-
-.stAlert > div {
-    color: inherit !important;
-}
-
-.stAlert[data-baseweb="notification"] {
-    padding: 1rem !important;
-    border-radius: 10px !important;
-}
-
-.stAlert[data-baseweb="notification"] [data-testid="stMarkdownContainer"] {
-    color: inherit !important;
-}
-
-.stAlert[data-baseweb="notification"].st-emotion-cache-1bs3bqr {
-    background-color: #f8d7da !important;
-    color: #721c24 !important;
-    border: 1px solid #f5c6cb !important;
-}
-
-.stAlert[data-baseweb="notification"].st-emotion-cache-13jzqpj {
-    background-color: #d4edda !important;
-    color: #155724 !important;
-    border: 1px solid #c3e6cb !important;
-}
-
-/* Mobile responsiveness */
-@media (max-width: 768px) {
-    .stColumns > div {
-        min-width: 100% !important;
-        flex: 1 1 100% !important;
-    }
-    
-    .main .block-container {
-        padding: 1rem !important;
-    }
+    background-color: var(--coffee-brown);
+    color: white;
 }
 </style>
 """, unsafe_allow_html=True)
