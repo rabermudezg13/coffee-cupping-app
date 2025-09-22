@@ -2,3 +2,5 @@ streamlit
 firebase-admin
 bcrypt
 python-dotenv
+plotly
+pandas
