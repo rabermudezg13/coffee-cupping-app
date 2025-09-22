@@ -1,5 +1,7 @@
 import streamlit as st
 from auth import AuthManager
+from coffee_shops import get_coffee_shop_manager
+from firebase import upload_image_to_storage
 import datetime
 
 # Page configuration
@@ -7,7 +9,12 @@ st.set_page_config(
     page_title="☕ Coffee Cupping App",
     page_icon="☕",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
 
 # Simple CSS
@@ -20,6 +27,14 @@ st.markdown("""
     background-color: var(--coffee-brown);
     color: white;
 }
+
+/* Hide Streamlit menu buttons */
+#MainMenu {visibility: hidden;}
+.stDeployButton {display: none;}
+header[data-testid="stHeader"] {display: none;}
+.stActionButton {display: none;}
+div[data-testid="stDecoration"] {display: none;}
+div[data-testid="stToolbar"] {display: none;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -176,7 +191,7 @@ def show_main_app(auth_manager):
     """, unsafe_allow_html=True)
     
     # Main app tabs
-    tab1, tab2, tab3 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "⚙️ Settings"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "⚙️ Settings"])
     
     with tab1:
         show_dashboard(auth_manager)
@@ -185,6 +200,9 @@ def show_main_app(auth_manager):
         show_my_cuppings(auth_manager)
     
     with tab3:
+        show_coffee_shops(auth_manager)
+    
+    with tab4:
         show_settings(auth_manager)
 
 def show_user_sidebar(auth_manager):
@@ -315,7 +333,9 @@ def show_quick_cupping(auth_manager):
                 }
                 
                 with st.spinner("Saving cupping..."):
-                    if st.session_state.db_manager.add_cupping(cupping_data, None):
+                    current_user = auth_manager.get_current_user()
+                    user_id = current_user['user_id'] if current_user else None
+                    if user_id and st.session_state.db_manager.add_cupping(cupping_data, user_id):
                         st.success("🎉 Cupping saved successfully!")
                         st.balloons()
                     else:
@@ -329,9 +349,22 @@ def show_cupping_results(auth_manager):
     
     current_user = auth_manager.get_current_user()
     
+    if not current_user:
+        st.error("❌ User not found")
+        return
+    
+    if 'db_manager' not in st.session_state:
+        st.error("❌ Database not initialized")
+        return
+    
     try:
         # Get quick cuppings
-        my_cuppings = st.session_state.db_manager.get_user_cuppings(current_user['user_id'])
+        user_id = current_user.get('user_id')
+        if not user_id:
+            st.error("❌ User ID not found")
+            return
+            
+        my_cuppings = st.session_state.db_manager.get_user_cuppings(user_id)
         
         if not my_cuppings:
             st.info("📝 No cuppings saved yet. Create your first cupping!")
@@ -427,6 +460,214 @@ def show_settings(auth_manager):
                 st.rerun()
             else:
                 st.error("Failed to save settings")
+
+def show_coffee_shops(auth_manager):
+    """Show Coffee Shops Reviews section"""
+    st.markdown("### 🏪 Coffee Shops Reviews")
+    
+    current_user = auth_manager.get_current_user()
+    if not current_user:
+        st.error("❌ User not found")
+        return
+    
+    user_id = current_user['user_id']
+    coffee_shop_manager = get_coffee_shop_manager()
+    
+    # Show existing reviews first
+    user_reviews = coffee_shop_manager.get_user_reviews(user_id)
+    
+    if user_reviews:
+        st.markdown(f"#### Your Coffee Shop Reviews ({len(user_reviews)})")
+        for review in user_reviews[:3]:  # Show last 3 reviews
+            with st.expander(f"🏪 {review.get('shopName', 'Unknown Shop')} - {review.get('coffeeRating', 0)}⭐"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Coffee Rating:** {review.get('coffeeRating', 0)}/5 ⭐")
+                    st.write(f"**Latte Art Rating:** {review.get('latteArtRating', 0)}/5 ⭐")
+                    st.write(f"**Barista:** {review.get('baristaName', 'N/A')}")
+                    st.write(f"**Preparation:** {review.get('preparationMethod', 'N/A')}")
+                with col2:
+                    st.write(f"**Coffee Type:** {review.get('coffeeType', 'N/A')}")
+                    st.write(f"**Roast Level:** {review.get('roastLevel', 'N/A')}")
+                    st.write(f"**Machine:** {review.get('machineType', 'N/A')}")
+                
+                if review.get('flavorNotes'):
+                    st.write(f"**Flavor Notes:** {', '.join(review['flavorNotes']) if isinstance(review['flavorNotes'], list) else review['flavorNotes']}")
+                
+                if review.get('photoUrl'):
+                    st.image(review['photoUrl'], caption="Coffee Shop Photo", width=200)
+                
+                created_at = review.get('createdAt')
+                if created_at:
+                    st.caption(f"Reviewed: {created_at.strftime('%Y-%m-%d %H:%M') if hasattr(created_at, 'strftime') else str(created_at)}")
+    
+    st.markdown("#### Add New Coffee Shop Review")
+    
+    # Coffee Shop Review Form
+    with st.form("coffee_shop_review_form"):
+        # Basic Info
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            shop_name = st.text_input("Coffee Shop Name *", placeholder="e.g., Blue Bottle Coffee")
+            coffee_rating = st.slider("Coffee Rating", 1, 5, 4, help="Rate the coffee quality")
+            latte_art_rating = st.slider("Latte Art Rating", 1, 5, 3, help="Rate the latte art quality")
+            barista_name = st.text_input("Barista Name", placeholder="e.g., Alex")
+            barista_instagram = st.text_input("Barista Instagram Handle", placeholder="e.g., @coffee_alex")
+        
+        with col2:
+            preparation_method = st.selectbox(
+                "Preparation Method *",
+                ["Espresso", "V60", "Chemex", "Aeropress", "Cold Brew", "French Press", "Other"]
+            )
+            
+            coffee_type = st.text_input(
+                "Coffee Type (variety + process)",
+                placeholder="e.g., Ethiopian Yirgacheffe Washed"
+            )
+            
+            roast_level = st.selectbox(
+                "Roast Level",
+                ["Light", "Medium-Light", "Medium", "Medium-Dark", "Dark"]
+            )
+            
+            machine_type = st.text_input("Machine Type", placeholder="e.g., La Marzocco Linea")
+        
+        # Sensory Evaluation
+        st.markdown("##### Sensory Notes")
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            aroma = st.text_area("Aroma", placeholder="Describe the aroma...")
+            
+            # Flavor Notes (allow users to input comma-separated or use multiselect)
+            flavor_notes_options = [
+                "Chocolate", "Vanilla", "Caramel", "Nutty", "Fruity", "Citrus", 
+                "Berry", "Floral", "Herbal", "Spicy", "Smoky", "Earthy", "Sweet", "Bitter"
+            ]
+            flavor_notes_selected = st.multiselect("Flavor Notes", flavor_notes_options)
+            flavor_notes_custom = st.text_input("Additional Flavor Notes", 
+                                               placeholder="Add custom notes, separated by commas")
+        
+        with col4:
+            # Aroma Notes
+            aroma_notes_options = [
+                "Fragrant", "Sweet", "Fruity", "Floral", "Nutty", "Chocolate", 
+                "Vanilla", "Spicy", "Herbal", "Fresh", "Rich", "Complex"
+            ]
+            aroma_notes_selected = st.multiselect("Aroma Notes", aroma_notes_options)
+            aroma_notes_custom = st.text_input("Additional Aroma Notes", 
+                                             placeholder="Add custom aroma notes, separated by commas")
+            
+            ambience = st.text_area("Ambience", 
+                                   placeholder="Describe music, service, atmosphere...")
+        
+        # Photo Upload
+        st.markdown("##### Photo Upload")
+        uploaded_photo = st.file_uploader(
+            "Upload a photo (optional)",
+            type=['png', 'jpg', 'jpeg'],
+            help="Upload a photo of your coffee, the shop, or latte art"
+        )
+        
+        # Privacy Settings
+        st.markdown("##### Privacy Settings")
+        col5, col6 = st.columns(2)
+        with col5:
+            is_public = st.checkbox("Make this review public", value=True)
+        with col6:
+            is_anonymous = st.checkbox("Post as Anonymous", value=False)
+        
+        # Submit Button
+        submit_review = st.form_submit_button("🏪 Save Coffee Shop Review", use_container_width=True)
+        
+        if submit_review:
+            if shop_name and preparation_method:
+                # Combine flavor notes
+                all_flavor_notes = flavor_notes_selected.copy()
+                if flavor_notes_custom:
+                    custom_notes = [note.strip() for note in flavor_notes_custom.split(',') if note.strip()]
+                    all_flavor_notes.extend(custom_notes)
+                
+                # Combine aroma notes
+                all_aroma_notes = aroma_notes_selected.copy()
+                if aroma_notes_custom:
+                    custom_aroma = [note.strip() for note in aroma_notes_custom.split(',') if note.strip()]
+                    all_aroma_notes.extend(custom_aroma)
+                
+                # Handle photo upload
+                photo_url = ""
+                if uploaded_photo:
+                    with st.spinner("Uploading photo..."):
+                        success, url = upload_image_to_storage(uploaded_photo, "coffee_shop_photos")
+                        if success and url:
+                            photo_url = url
+                            st.success("📸 Photo uploaded successfully!")
+                        else:
+                            st.warning("⚠️ Photo upload failed, but review will be saved without photo")
+                
+                # Determine reviewer name
+                reviewer_name = "Anonymous" if is_anonymous else auth_manager.get_display_name()
+                
+                # Prepare review data
+                review_data = {
+                    'shopName': shop_name,
+                    'coffeeRating': coffee_rating,
+                    'latteArtRating': latte_art_rating,
+                    'baristaName': barista_name or "",
+                    'baristaInstagram': barista_instagram or "",
+                    'preparationMethod': preparation_method,
+                    'coffeeType': coffee_type or "",
+                    'roastLevel': roast_level,
+                    'aroma': aroma or "",
+                    'machineType': machine_type or "",
+                    'ambience': ambience or "",
+                    'flavorNotes': all_flavor_notes,
+                    'aromaNotes': all_aroma_notes,
+                    'photoUrl': photo_url,
+                    'isPublic': is_public,
+                    'isAnonymous': is_anonymous
+                }
+                
+                # Save review
+                with st.spinner("Saving coffee shop review..."):
+                    review_id = coffee_shop_manager.create_review(review_data, user_id, reviewer_name)
+                    
+                    if review_id:
+                        st.success("🎉 Coffee shop review saved successfully!")
+                        st.balloons()
+                        st.info("Your review has been added to your collection and will help other coffee lovers!")
+                    else:
+                        st.error("❌ Failed to save coffee shop review")
+            else:
+                st.error("❌ Please fill in required fields: Coffee Shop Name and Preparation Method")
+    
+    # Show public reviews section
+    st.markdown("#### Recent Public Reviews")
+    public_reviews = coffee_shop_manager.get_public_reviews(limit=5)
+    
+    if public_reviews:
+        for review in public_reviews:
+            with st.expander(f"🏪 {review.get('shopName', 'Unknown')} - {review.get('coffeeRating', 0)}⭐ by {review.get('reviewerName', 'Anonymous')}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Coffee Rating:** {review.get('coffeeRating', 0)}/5 ⭐")
+                    st.write(f"**Latte Art:** {review.get('latteArtRating', 0)}/5 ⭐")
+                    st.write(f"**Preparation:** {review.get('preparationMethod', 'N/A')}")
+                with col2:
+                    st.write(f"**Coffee Type:** {review.get('coffeeType', 'N/A')}")
+                    st.write(f"**Roast:** {review.get('roastLevel', 'N/A')}")
+                
+                if review.get('flavorNotes'):
+                    st.write(f"**Flavor Notes:** {', '.join(review['flavorNotes']) if isinstance(review['flavorNotes'], list) else review['flavorNotes']}")
+                
+                if review.get('ambience'):
+                    st.write(f"**Ambience:** {review['ambience']}")
+                
+                if review.get('photoUrl'):
+                    st.image(review['photoUrl'], caption=f"Photo from {review.get('shopName', 'Coffee Shop')}", width=200)
+    else:
+        st.info("No public reviews yet. Be the first to share your coffee shop experience!")
 
 def show_footer():
     """Show footer with copyright"""

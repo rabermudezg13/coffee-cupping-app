@@ -1,5 +1,7 @@
 import streamlit as st
 from auth import AuthManager
+from coffee_shops import get_coffee_shop_manager
+from firebase import upload_image_to_storage
 import datetime
 
 # Page configuration
@@ -7,7 +9,12 @@ st.set_page_config(
     page_title="☕ Coffee Cupping App",
     page_icon="☕",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
 
 # Custom CSS for responsive design
@@ -175,6 +182,14 @@ st.markdown("""
     border-radius: 10px;
     color: #0c5460 !important;
 }
+
+/* Hide Streamlit menu buttons */
+#MainMenu {visibility: hidden;}
+.stDeployButton {display: none;}
+header[data-testid="stHeader"] {display: none;}
+.stActionButton {display: none;}
+div[data-testid="stDecoration"] {display: none;}
+div[data-testid="stToolbar"] {display: none;}
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
@@ -348,7 +363,7 @@ def show_main_app(auth_manager):
     """, unsafe_allow_html=True)
     
     # Main app tabs
-    tab1, tab2, tab3 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "⚙️ Settings"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "⚙️ Settings"])
     
     with tab1:
         show_dashboard(auth_manager)
@@ -357,6 +372,9 @@ def show_main_app(auth_manager):
         show_my_cuppings(auth_manager)
     
     with tab3:
+        show_coffee_shops(auth_manager)
+    
+    with tab4:
         show_settings(auth_manager)
 
 def show_user_sidebar(auth_manager):
@@ -490,7 +508,9 @@ def show_quick_cupping(auth_manager):
                 }
                 
                 with st.spinner("Guardando catación..."):
-                    if st.session_state.db_manager.add_cupping(cupping_data, uploaded_file):
+                    current_user = auth_manager.get_current_user()
+                    user_id = current_user['user_id'] if current_user else None
+                    if user_id and st.session_state.db_manager.add_cupping(cupping_data, user_id):
                         st.success("🎉 Catación guardada exitosamente!")
                         st.balloons()
                     else:
@@ -710,6 +730,122 @@ def show_settings(auth_manager):
         else:
             last_login = "Recently"
         st.markdown(f"**Last login:** {last_login}")
+
+def show_coffee_shops(auth_manager):
+    """Show Coffee Shops Reviews section"""
+    st.markdown("### 🏪 Coffee Shops Reviews")
+    
+    current_user = auth_manager.get_current_user()
+    if not current_user:
+        st.error("❌ User not found")
+        return
+    
+    user_id = current_user['user_id']
+    coffee_shop_manager = get_coffee_shop_manager()
+    
+    st.markdown("#### Add New Coffee Shop Review")
+    
+    # Coffee Shop Review Form
+    with st.form("coffee_shop_review_form"):
+        # Basic Info
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            shop_name = st.text_input("Coffee Shop Name *", placeholder="e.g., Blue Bottle Coffee")
+            coffee_rating = st.slider("Coffee Rating", 1, 5, 4, help="Rate the coffee quality")
+            latte_art_rating = st.slider("Latte Art Rating", 1, 5, 3, help="Rate the latte art quality")
+            barista_name = st.text_input("Barista Name", placeholder="e.g., Alex")
+        
+        with col2:
+            preparation_method = st.selectbox(
+                "Preparation Method *",
+                ["Espresso", "V60", "Chemex", "Aeropress", "Cold Brew", "French Press", "Other"]
+            )
+            
+            coffee_type = st.text_input(
+                "Coffee Type (variety + process)",
+                placeholder="e.g., Ethiopian Yirgacheffe Washed"
+            )
+            
+            roast_level = st.selectbox(
+                "Roast Level",
+                ["Light", "Medium-Light", "Medium", "Medium-Dark", "Dark"]
+            )
+        
+        # Flavor Notes
+        flavor_notes_options = [
+            "Chocolate", "Vanilla", "Caramel", "Nutty", "Fruity", "Citrus", 
+            "Berry", "Floral", "Herbal", "Spicy", "Smoky", "Earthy", "Sweet", "Bitter"
+        ]
+        flavor_notes_selected = st.multiselect("Flavor Notes", flavor_notes_options)
+        
+        ambience = st.text_area("Ambience", placeholder="Describe music, service, atmosphere...")
+        
+        # Photo Upload
+        uploaded_photo = st.file_uploader(
+            "Upload a photo (optional)",
+            type=['png', 'jpg', 'jpeg'],
+            help="Upload a photo of your coffee, the shop, or latte art"
+        )
+        
+        # Privacy Settings
+        col3, col4 = st.columns(2)
+        with col3:
+            is_public = st.checkbox("Make this review public", value=True)
+        with col4:
+            is_anonymous = st.checkbox("Post as Anonymous", value=False)
+        
+        # Submit Button
+        submit_review = st.form_submit_button("🏪 Save Coffee Shop Review", use_container_width=True)
+        
+        if submit_review:
+            if shop_name and preparation_method:
+                # Handle photo upload
+                photo_url = ""
+                if uploaded_photo:
+                    with st.spinner("Uploading photo..."):
+                        success, url = upload_image_to_storage(uploaded_photo, "coffee_shop_photos")
+                        if success and url:
+                            photo_url = url
+                            st.success("📸 Photo uploaded successfully!")
+                        else:
+                            st.warning("⚠️ Photo upload failed, but review will be saved without photo")
+                
+                # Determine reviewer name
+                reviewer_name = "Anonymous" if is_anonymous else auth_manager.get_display_name()
+                
+                # Prepare review data
+                review_data = {
+                    'shopName': shop_name,
+                    'coffeeRating': coffee_rating,
+                    'latteArtRating': latte_art_rating,
+                    'baristaName': barista_name or "",
+                    'baristaInstagram': "",
+                    'preparationMethod': preparation_method,
+                    'coffeeType': coffee_type or "",
+                    'roastLevel': roast_level,
+                    'aroma': "",
+                    'machineType': "",
+                    'ambience': ambience or "",
+                    'flavorNotes': flavor_notes_selected,
+                    'aromaNotes': [],
+                    'photoUrl': photo_url,
+                    'isPublic': is_public,
+                    'isAnonymous': is_anonymous
+                }
+                
+                # Save review
+                with st.spinner("Saving coffee shop review..."):
+                    review_id = coffee_shop_manager.create_review(review_data, user_id, reviewer_name)
+                    
+                    if review_id:
+                        st.success("🎉 Coffee shop review saved successfully!")
+                        st.balloons()
+                        st.info("Your review has been added to your collection!")
+                    else:
+                        st.error("❌ Failed to save coffee shop review")
+            else:
+                st.error("❌ Please fill in required fields: Coffee Shop Name and Preparation Method")
 
 def show_footer():
     """Show footer with copyright"""

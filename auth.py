@@ -1,12 +1,14 @@
 import streamlit as st
 import bcrypt
 from typing import Optional, Dict
-from database import UserDatabase
+from firebase import get_firestore_db
 import re
+import uuid
+from datetime import datetime
 
 class AuthManager:
     def __init__(self):
-        self.db = UserDatabase()
+        self.db = get_firestore_db()
         
         # Initialize session state
         if 'authenticated' not in st.session_state:
@@ -53,15 +55,15 @@ class AuthManager:
             return False, "Password must be at least 6 characters"
         
         # Check if user already exists
-        if self.db.get_user_by_email(email):
+        if self.get_user_by_email(email):
             return False, "Email already registered"
         
-        if self.db.get_user_by_username(username):
+        if self.get_user_by_username(username):
             return False, "Username already taken"
         
         # Create user
         password_hash = self.hash_password(password)
-        success = self.db.create_user(email, username, password_hash)
+        success = self.create_user(email, username, password_hash)
         
         if success:
             return True, "Registration successful! Please log in."
@@ -72,16 +74,16 @@ class AuthManager:
         """Login user with email or username"""
         # Determine if login_field is email or username
         if '@' in login_field:
-            user = self.db.get_user_by_email(login_field)
+            user = self.get_user_by_email(login_field)
         else:
-            user = self.db.get_user_by_username(login_field)
+            user = self.get_user_by_username(login_field)
         
         if not user:
             return False, "Invalid credentials"
         
         if self.verify_password(password, user['password_hash']):
             # Update last login
-            self.db.update_last_login(user['user_id'])
+            self.update_last_login(user['user_id'])
             
             # Set session state
             st.session_state.authenticated = True
@@ -111,7 +113,7 @@ class AuthManager:
         
         current_user = self.get_current_user()
         if current_user:
-            success = self.db.update_user_preferences(current_user['user_id'], preferences)
+            success = self.update_user_preferences(current_user['user_id'], preferences)
             
             if success:
                 # Update session state
@@ -137,3 +139,96 @@ class AuthManager:
                 return "Anonymous"
         
         return "Guest"
+    
+    def create_user(self, email: str, username: str, password_hash: str) -> bool:
+        """Create a new user in Firestore"""
+        try:
+            if not self.db:
+                st.error("❌ Database connection not available")
+                return False
+            
+            user_id = str(uuid.uuid4())
+            user_data = {
+                'user_id': user_id,
+                'email': email,
+                'username': username,
+                'password_hash': password_hash,
+                'created_at': datetime.now(),
+                'last_login': datetime.now(),
+                'preferences': {
+                    'show_name': True,
+                    'email_notifications': True,
+                    'theme': 'light'
+                }
+            }
+            
+            self.db.collection('users').document(user_id).set(user_data)
+            return True
+            
+        except Exception as e:
+            st.error(f"❌ Error creating user: {str(e)}")
+            return False
+    
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email"""
+        try:
+            if not self.db:
+                return None
+                
+            users_ref = self.db.collection('users')
+            query = users_ref.where('email', '==', email).limit(1)
+            docs = query.stream()
+            
+            for doc in docs:
+                return doc.to_dict()
+            return None
+            
+        except Exception as e:
+            st.error(f"Error getting user by email: {e}")
+            return None
+    
+    def get_user_by_username(self, username: str) -> Optional[Dict]:
+        """Get user by username"""
+        try:
+            if not self.db:
+                return None
+                
+            users_ref = self.db.collection('users')
+            query = users_ref.where('username', '==', username).limit(1)
+            docs = query.stream()
+            
+            for doc in docs:
+                return doc.to_dict()
+            return None
+            
+        except Exception as e:
+            st.error(f"Error getting user by username: {e}")
+            return None
+    
+    def update_last_login(self, user_id: str) -> bool:
+        """Update user's last login timestamp"""
+        try:
+            if not self.db:
+                return False
+                
+            user_ref = self.db.collection('users').document(user_id)
+            user_ref.update({'last_login': datetime.now()})
+            return True
+            
+        except Exception as e:
+            st.error(f"Error updating last login: {e}")
+            return False
+    
+    def update_user_preferences(self, user_id: str, preferences: Dict) -> bool:
+        """Update user preferences using merge=True"""
+        try:
+            if not self.db:
+                return False
+                
+            user_ref = self.db.collection('users').document(user_id)
+            user_ref.set({'preferences': preferences}, merge=True)
+            return True
+            
+        except Exception as e:
+            st.error(f"Error updating preferences: {e}")
+            return False

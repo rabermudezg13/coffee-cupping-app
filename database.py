@@ -1,220 +1,60 @@
-import firebase_admin
-from firebase_admin import credentials, firestore
+"""
+Legacy database module - now uses modular Firebase structure
+This module provides backward compatibility for existing code
+"""
 import streamlit as st
-import os
-import json
-from datetime import datetime
-import uuid
-from typing import Dict, Optional
-from dotenv import load_dotenv
+from typing import Dict, Optional, List
+from firebase import get_firestore_db
+from cuppings import get_cupping_manager
+from coffee_shops import get_coffee_shop_manager
 
-load_dotenv()
 
 class UserDatabase:
+    """Legacy UserDatabase class for backward compatibility"""
+    
     def __init__(self):
-        self.db = self._initialize_firestore()
+        self.db = get_firestore_db()
+        self.cupping_manager = get_cupping_manager()
+        self.coffee_shop_manager = get_coffee_shop_manager()
     
-    def _initialize_firestore(self):
-        """Initialize Firestore connection"""
-        if not firebase_admin._apps:
-            try:
-                firebase_config = None
-                
-                # Check if running in Streamlit Cloud (secrets) or locally (.env file)
-                if hasattr(st, 'secrets') and len(st.secrets) > 0:
-                    st.info("🔍 Detected Streamlit Cloud environment")
-                    try:
-                        # Check if Firebase secrets exist
-                        if 'FIREBASE_PROJECT_ID' in st.secrets:
-                            firebase_config = {
-                                "type": str(st.secrets["FIREBASE_TYPE"]),
-                                "project_id": str(st.secrets["FIREBASE_PROJECT_ID"]),
-                                "private_key_id": str(st.secrets["FIREBASE_PRIVATE_KEY_ID"]),
-                                "private_key": str(st.secrets["FIREBASE_PRIVATE_KEY"]).replace('\\n', '\n'),
-                                "client_email": str(st.secrets["FIREBASE_CLIENT_EMAIL"]),
-                                "client_id": str(st.secrets["FIREBASE_CLIENT_ID"]),
-                                "auth_uri": str(st.secrets["FIREBASE_AUTH_URI"]),
-                                "token_uri": str(st.secrets["FIREBASE_TOKEN_URI"]),
-                                "auth_provider_x509_cert_url": str(st.secrets["FIREBASE_AUTH_PROVIDER_X509_CERT_URL"]),
-                                "client_x509_cert_url": str(st.secrets["FIREBASE_CLIENT_X509_CERT_URL"])
-                            }
-                            st.success("✅ Firebase secrets loaded from Streamlit Cloud")
-                        else:
-                            st.error("❌ Firebase secrets not found in Streamlit Cloud")
-                            st.info("Available secrets: " + str(list(st.secrets.keys())))
-                            return None
-                    except Exception as e:
-                        st.error(f"❌ Error accessing Streamlit secrets: {e}")
-                        return None
-                        
-                elif os.path.exists('.env'):
-                    st.info("🔍 Detected local environment")
-                    firebase_config = {
-                        "type": os.getenv("FIREBASE_TYPE"),
-                        "project_id": os.getenv("FIREBASE_PROJECT_ID"),
-                        "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
-                        "private_key": os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n'),
-                        "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
-                        "client_id": os.getenv("FIREBASE_CLIENT_ID"),
-                        "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
-                        "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
-                        "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
-                        "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
-                    }
-                    st.success("✅ Firebase config loaded from .env file")
-                else:
-                    st.error("❌ Firebase configuration not found")
-                    st.info("For local development: create .env file from .env.example")
-                    st.info("For Streamlit Cloud: configure secrets in app settings")
-                    return None
-                
-                # Check for missing required fields
-                required_fields = ["project_id", "private_key", "client_email"]
-                missing_fields = [field for field in required_fields if not firebase_config.get(field)]
-                
-                if missing_fields:
-                    st.error(f"❌ Missing Firebase configuration: {', '.join(missing_fields)}")
-                    with st.expander("Debug Info"):
-                        st.write("Config keys:", list(firebase_config.keys()))
-                        st.write("Project ID:", firebase_config.get('project_id', 'MISSING'))
-                        st.write("Client Email:", firebase_config.get('client_email', 'MISSING'))
-                        st.write("Has Private Key:", bool(firebase_config.get('private_key')))
-                    return None
-                
-                st.info("🔑 Initializing Firebase credentials...")
-                cred = credentials.Certificate(firebase_config)
-                
-                st.info("🚀 Connecting to Firebase...")
-                firebase_admin.initialize_app(cred)
-                
-                st.info("📊 Testing Firestore connection...")
-                db = firestore.client()
-                
-                # Test basic connection
-                test_ref = db.collection('_test').document('connection')
-                test_ref.set({'test': True, 'timestamp': firestore.SERVER_TIMESTAMP})
-                test_ref.delete()  # Clean up test
-                
-                st.success("✅ Firebase connected and tested successfully!")
-                return db
-                
-            except Exception as e:
-                st.error(f"❌ Firebase initialization failed: {str(e)}")
-                with st.expander("Debug Info"):
-                    st.write(f"Error details: {e}")
-                    st.write(f"Error type: {type(e).__name__}")
-                    if hasattr(st, 'secrets') and len(st.secrets) > 0:
-                        st.write("Environment: Streamlit Cloud")
-                        st.write("Available secrets:", list(st.secrets.keys()))
-                    else:
-                        st.write("Environment: Local")
-                        st.write(f"Project ID: {os.getenv('FIREBASE_PROJECT_ID', 'Not set')}")
-                        st.write(f"Client Email: {os.getenv('FIREBASE_CLIENT_EMAIL', 'Not set')}")
-                return None
-        
-        # If firebase_admin was already initialized, just return the client
-        return firestore.client()
-    
+    # Legacy user methods - delegate to AuthManager (imported in main apps)
     def create_user(self, email: str, username: str, password_hash: str) -> bool:
-        """Create a new user in Firestore"""
-        try:
-            # Check if database is available
-            if not self.db:
-                st.error("❌ Database connection not available. Please check Firebase configuration.")
-                return False
-            
-            # Check if user already exists
-            existing_email = self.get_user_by_email(email)
-            if existing_email:
-                st.error("❌ This email is already registered. Please use a different email or try logging in.")
-                return False
-            
-            existing_username = self.get_user_by_username(username)
-            if existing_username:
-                st.error("❌ This username is already taken. Please choose a different username.")
-                return False
-            
-            user_id = str(uuid.uuid4())
-            user_data = {
-                'user_id': user_id,
-                'email': email,
-                'username': username,
-                'password_hash': password_hash,
-                'created_at': datetime.now(),
-                'last_login': datetime.now(),
-                'preferences': {
-                    'show_name': True,  # True = show name, False = anonymous
-                    'email_notifications': True,
-                    'theme': 'light'
-                }
-            }
-            
-            self.db.collection('users').document(user_id).set(user_data)
-            return True
-            
-        except Exception as e:
-            st.error(f"❌ Error creating user: {str(e)}")
-            with st.expander("Debug Info"):
-                st.write(f"Error details: {e}")
-                st.write(f"Email: {email}")
-                st.write(f"Username: {username}")
-            return False
+        """Legacy method - use AuthManager.create_user instead"""
+        st.warning("⚠️ Using legacy create_user method. Consider using AuthManager directly.")
+        from auth import AuthManager
+        auth = AuthManager()
+        return auth.create_user(email, username, password_hash)
     
     def get_user_by_email(self, email: str) -> Optional[Dict]:
-        """Get user by email"""
-        try:
-            users_ref = self.db.collection('users')
-            query = users_ref.where('email', '==', email).limit(1)
-            docs = query.stream()
-            
-            for doc in docs:
-                return doc.to_dict()
-            return None
-            
-        except Exception as e:
-            st.error(f"Error getting user by email: {e}")
-            return None
+        """Legacy method - use AuthManager.get_user_by_email instead"""
+        from auth import AuthManager
+        auth = AuthManager()
+        return auth.get_user_by_email(email)
     
     def get_user_by_username(self, username: str) -> Optional[Dict]:
-        """Get user by username"""
-        try:
-            users_ref = self.db.collection('users')
-            query = users_ref.where('username', '==', username).limit(1)
-            docs = query.stream()
-            
-            for doc in docs:
-                return doc.to_dict()
-            return None
-            
-        except Exception as e:
-            st.error(f"Error getting user by username: {e}")
-            return None
+        """Legacy method - use AuthManager.get_user_by_username instead"""
+        from auth import AuthManager
+        auth = AuthManager()
+        return auth.get_user_by_username(username)
     
     def update_last_login(self, user_id: str) -> bool:
-        """Update user's last login timestamp"""
-        try:
-            user_ref = self.db.collection('users').document(user_id)
-            user_ref.update({'last_login': datetime.now()})
-            return True
-            
-        except Exception as e:
-            st.error(f"Error updating last login: {e}")
-            return False
+        """Legacy method - use AuthManager.update_last_login instead"""
+        from auth import AuthManager
+        auth = AuthManager()
+        return auth.update_last_login(user_id)
     
     def update_user_preferences(self, user_id: str, preferences: Dict) -> bool:
-        """Update user preferences"""
-        try:
-            user_ref = self.db.collection('users').document(user_id)
-            user_ref.update({'preferences': preferences})
-            return True
-            
-        except Exception as e:
-            st.error(f"Error updating preferences: {e}")
-            return False
+        """Legacy method - use AuthManager.update_user_preferences instead"""
+        from auth import AuthManager
+        auth = AuthManager()
+        return auth.update_user_preferences(user_id, preferences)
     
     def get_user_by_id(self, user_id: str) -> Optional[Dict]:
         """Get user by user_id"""
         try:
+            if not self.db:
+                return None
+                
             user_ref = self.db.collection('users').document(user_id)
             doc = user_ref.get()
             
@@ -225,3 +65,55 @@ class UserDatabase:
         except Exception as e:
             st.error(f"Error getting user by ID: {e}")
             return None
+    
+    # Cupping methods - delegate to CuppingManager
+    def add_cupping(self, cupping_data: Dict, user_id: str) -> bool:
+        """Add a new cupping record"""
+        try:
+            cupping_id = self.cupping_manager.create_cupping(cupping_data, user_id)
+            return cupping_id is not None
+        except Exception as e:
+            st.error(f"Error adding cupping: {e}")
+            return False
+    
+    def get_user_cuppings(self, user_id: str) -> List[Dict]:
+        """Get all cuppings for a user"""
+        return self.cupping_manager.get_user_cuppings(user_id)
+    
+    def get_public_cuppings(self, limit: int = 20) -> List[Dict]:
+        """Get public cuppings"""
+        return self.cupping_manager.get_public_cuppings(limit)
+    
+    def update_cupping(self, cupping_id: str, update_data: Dict) -> bool:
+        """Update a cupping record"""
+        return self.cupping_manager.update_cupping(cupping_id, update_data)
+    
+    def delete_cupping(self, cupping_id: str) -> bool:
+        """Delete a cupping record"""
+        return self.cupping_manager.delete_cupping(cupping_id)
+    
+    def get_cupping_stats(self, user_id: str) -> Dict:
+        """Get cupping statistics for a user"""
+        return self.cupping_manager.get_cupping_stats(user_id)
+    
+    # Coffee Shop Review methods - delegate to CoffeeShopReviewManager
+    def add_coffee_shop_review(self, review_data: Dict, user_id: str, reviewer_name: str) -> bool:
+        """Add a new coffee shop review"""
+        try:
+            review_id = self.coffee_shop_manager.create_review(review_data, user_id, reviewer_name)
+            return review_id is not None
+        except Exception as e:
+            st.error(f"Error adding coffee shop review: {e}")
+            return False
+    
+    def get_user_coffee_shop_reviews(self, user_id: str) -> List[Dict]:
+        """Get all coffee shop reviews for a user"""
+        return self.coffee_shop_manager.get_user_reviews(user_id)
+    
+    def get_public_coffee_shop_reviews(self, limit: int = 20) -> List[Dict]:
+        """Get public coffee shop reviews"""
+        return self.coffee_shop_manager.get_public_reviews(limit)
+    
+    def get_coffee_shop_review_stats(self, user_id: str) -> Dict:
+        """Get coffee shop review statistics for a user"""
+        return self.coffee_shop_manager.get_user_review_stats(user_id)
