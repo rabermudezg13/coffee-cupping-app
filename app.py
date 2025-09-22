@@ -27,15 +27,10 @@ def initialize_auth():
     """Initialize authentication manager"""
     if 'auth_manager' not in st.session_state:
         try:
-            st.info("🔄 Initializing app components...")
             from database import UserDatabase
             if 'db_manager' not in st.session_state:
-                st.info("📊 Setting up database connection...")
                 st.session_state.db_manager = UserDatabase()
-                st.success("✅ Database initialized!")
-            st.info("🔐 Setting up authentication...")
             st.session_state.auth_manager = AuthManager()
-            st.success("✅ Authentication initialized!")
         except Exception as e:
             st.error(f"❌ Error initializing app: {e}")
             st.error(f"Error details: {str(e)}")
@@ -44,11 +39,7 @@ def initialize_auth():
             st.stop()
 
 def main():
-    st.info("🚀 Starting Coffee Cupping App...")
-    
     initialize_auth()
-    st.success("✅ App components initialized!")
-    
     auth_manager = st.session_state.auth_manager
     
     # Main app header
@@ -63,13 +54,9 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    st.info("🔍 Checking authentication status...")
-    
     if not auth_manager.is_authenticated():
-        st.info("👤 User not authenticated - showing login page")
         show_auth_page(auth_manager)
     else:
-        st.success("✅ User authenticated - showing main app")
         show_main_app(auth_manager)
 
 def show_auth_page(auth_manager):
