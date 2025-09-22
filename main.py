@@ -546,14 +546,47 @@ def show_received_invitations(invitation_manager, user_id: str, user_name: str):
         responses = invitation.get('responses', {})
         user_response = responses.get(user_id, {})
         
-        with st.expander(f"☕ {session_data.get('coffee_name', 'Coffee Cupping')} - from {inviter_name}"):
+        session_type = session_data.get('session_type', 'Coffee Cupping')
+        
+        # Dynamic title based on session type
+        if session_type == "Coffee Cupping":
+            title = f"☕ {session_data.get('coffee_name', 'Coffee Cupping')} - from {inviter_name}"
+        elif session_type == "Coffee Bag Review":
+            title = f"📦 {session_data.get('coffee_name', 'Coffee Bag')} - from {inviter_name}"
+        elif session_type == "Coffee Shop Review":
+            title = f"🏪 {session_data.get('shop_name', 'Coffee Shop')} - from {inviter_name}"
+        else:
+            title = f"🤝 {session_type} - from {inviter_name}"
+        
+        with st.expander(title):
             col1, col2 = st.columns([2, 1])
             
             with col1:
                 st.write(f"**Inviter:** {inviter_name}")
-                st.write(f"**Coffee:** {session_data.get('coffee_name', 'N/A')}")
-                st.write(f"**Origin:** {session_data.get('origin', 'N/A')}")
-                st.write(f"**Session Type:** {session_data.get('session_type', 'Quick Cupping')}")
+                st.write(f"**Session Type:** {session_type}")
+                
+                if session_type == "Coffee Cupping":
+                    st.write(f"**Coffee:** {session_data.get('coffee_name', 'N/A')}")
+                    st.write(f"**Origin:** {session_data.get('origin', 'N/A')}")
+                    st.write(f"**Roaster:** {session_data.get('roaster', 'N/A')}")
+                    st.write(f"**Processing:** {session_data.get('processing_method', 'N/A')}")
+                
+                elif session_type == "Coffee Bag Review":
+                    st.write(f"**Coffee:** {session_data.get('coffee_name', 'N/A')}")
+                    st.write(f"**Origin:** {session_data.get('origin', 'N/A')}")
+                    st.write(f"**Farm:** {session_data.get('farm', 'N/A')}")
+                    st.write(f"**Roast Level:** {session_data.get('roast_level', 'N/A')}")
+                    st.write(f"**Grind Type:** {session_data.get('grind_type', 'N/A')}")
+                    if session_data.get('cost'):
+                        st.write(f"**Cost:** ${session_data.get('cost', 0):.2f}")
+                
+                elif session_type == "Coffee Shop Review":
+                    st.write(f"**Shop:** {session_data.get('shop_name', 'N/A')}")
+                    st.write(f"**Coffee Served:** {session_data.get('coffee_name', 'N/A')}")
+                    st.write(f"**Barista:** {session_data.get('barista_name', 'N/A')}")
+                    st.write(f"**Preparation:** {session_data.get('preparation_method', 'N/A')}")
+                    st.write(f"**Location:** {session_data.get('location', 'N/A')}")
+                
                 if created_at:
                     st.write(f"**Invited:** {created_at.strftime('%Y-%m-%d %H:%M') if hasattr(created_at, 'strftime') else str(created_at)}")
             
@@ -578,43 +611,127 @@ def show_received_invitations(invitation_manager, user_id: str, user_name: str):
             # Show evaluation form if accepted
             if user_response and user_response.get('response') == 'accept':
                 st.markdown("---")
-                st.markdown("**🥤 Submit Your Cupping Evaluation**")
+                session_type = session_data.get('session_type', 'Coffee Cupping')
                 
-                with st.form(f"collab_eval_{invitation['invitationId']}"):
-                    col_eval1, col_eval2 = st.columns(2)
+                if session_type == "Coffee Cupping":
+                    st.markdown("**☕ Submit Your Cupping Evaluation**")
                     
-                    with col_eval1:
-                        overall_score = st.slider("Overall Score", 0, 100, 80, key=f"overall_{invitation['invitationId']}")
-                        aroma = st.slider("Aroma", 0, 10, 7, key=f"aroma_{invitation['invitationId']}")
-                        flavor = st.slider("Flavor", 0, 10, 7, key=f"flavor_{invitation['invitationId']}")
-                    
-                    with col_eval2:
-                        acidity = st.slider("Acidity", 0, 10, 7, key=f"acidity_{invitation['invitationId']}")
-                        body = st.slider("Body", 0, 10, 7, key=f"body_{invitation['invitationId']}")
-                        aftertaste = st.slider("Aftertaste", 0, 10, 7, key=f"aftertaste_{invitation['invitationId']}")
-                    
-                    flavor_notes = st.text_area("Flavor Notes", placeholder="chocolate, citrus, floral...", key=f"notes_{invitation['invitationId']}")
-                    additional_notes = st.text_area("Additional Notes", key=f"add_notes_{invitation['invitationId']}")
-                    
-                    submit_eval = st.form_submit_button("📊 Submit Evaluation")
-                    
-                    if submit_eval:
-                        evaluation_data = {
-                            'overall_score': overall_score,
-                            'aroma': aroma,
-                            'flavor': flavor,
-                            'acidity': acidity,
-                            'body': body,
-                            'aftertaste': aftertaste,
-                            'flavor_notes': flavor_notes,
-                            'additional_notes': additional_notes
-                        }
+                    with st.form(f"cupping_eval_{invitation['invitationId']}"):
+                        col_eval1, col_eval2 = st.columns(2)
                         
-                        if invitation_manager.submit_collaborative_evaluation(invitation['invitationId'], user_id, user_name, evaluation_data):
-                            st.success("🎉 Evaluation submitted successfully!")
-                            st.balloons()
-                        else:
-                            st.error("❌ Failed to submit evaluation")
+                        with col_eval1:
+                            overall_score = st.slider("Overall Score", 0, 100, 80, key=f"overall_{invitation['invitationId']}")
+                            aroma = st.slider("Aroma", 0, 10, 7, key=f"aroma_{invitation['invitationId']}")
+                            flavor = st.slider("Flavor", 0, 10, 7, key=f"flavor_{invitation['invitationId']}")
+                        
+                        with col_eval2:
+                            acidity = st.slider("Acidity", 0, 10, 7, key=f"acidity_{invitation['invitationId']}")
+                            body = st.slider("Body", 0, 10, 7, key=f"body_{invitation['invitationId']}")
+                            aftertaste = st.slider("Aftertaste", 0, 10, 7, key=f"aftertaste_{invitation['invitationId']}")
+                        
+                        flavor_notes = st.text_area("Flavor Notes", placeholder="chocolate, citrus, floral...", key=f"notes_{invitation['invitationId']}")
+                        additional_notes = st.text_area("Additional Notes", key=f"add_notes_{invitation['invitationId']}")
+                        
+                        submit_eval = st.form_submit_button("📊 Submit Cupping Evaluation")
+                        
+                        if submit_eval:
+                            evaluation_data = {
+                                'overall_score': overall_score,
+                                'aroma': aroma,
+                                'flavor': flavor,
+                                'acidity': acidity,
+                                'body': body,
+                                'aftertaste': aftertaste,
+                                'flavor_notes': flavor_notes,
+                                'additional_notes': additional_notes,
+                                'evaluation_type': 'cupping'
+                            }
+                            
+                            if invitation_manager.submit_collaborative_evaluation(invitation['invitationId'], user_id, user_name, evaluation_data):
+                                st.success("🎉 Cupping evaluation submitted successfully!")
+                                st.balloons()
+                            else:
+                                st.error("❌ Failed to submit evaluation")
+                
+                elif session_type == "Coffee Bag Review":
+                    st.markdown("**📦 Submit Your Coffee Bag Review**")
+                    
+                    with st.form(f"bag_eval_{invitation['invitationId']}"):
+                        col_eval1, col_eval2 = st.columns(2)
+                        
+                        with col_eval1:
+                            rating = st.slider("Overall Rating", 1, 5, 4, key=f"rating_{invitation['invitationId']}")
+                            value_for_money = st.slider("Value for Money", 1, 5, 3, key=f"value_{invitation['invitationId']}")
+                            packaging = st.slider("Packaging Quality", 1, 5, 3, key=f"packaging_{invitation['invitationId']}")
+                        
+                        with col_eval2:
+                            would_recommend = st.checkbox("Would Recommend", key=f"recommend_{invitation['invitationId']}")
+                            would_buy_again = st.checkbox("Would Buy Again", key=f"buy_again_{invitation['invitationId']}")
+                            freshness = st.slider("Freshness", 1, 5, 4, key=f"freshness_{invitation['invitationId']}")
+                        
+                        flavor_notes = st.text_area("Flavor Notes", placeholder="Notes about taste, aroma, etc...", key=f"bag_notes_{invitation['invitationId']}")
+                        additional_notes = st.text_area("Additional Comments", key=f"bag_add_notes_{invitation['invitationId']}")
+                        
+                        submit_eval = st.form_submit_button("📦 Submit Coffee Bag Review")
+                        
+                        if submit_eval:
+                            evaluation_data = {
+                                'rating': rating,
+                                'value_for_money': value_for_money,
+                                'packaging': packaging,
+                                'would_recommend': would_recommend,
+                                'would_buy_again': would_buy_again,
+                                'freshness': freshness,
+                                'flavor_notes': flavor_notes,
+                                'additional_notes': additional_notes,
+                                'evaluation_type': 'coffee_bag'
+                            }
+                            
+                            if invitation_manager.submit_collaborative_evaluation(invitation['invitationId'], user_id, user_name, evaluation_data):
+                                st.success("🎉 Coffee bag review submitted successfully!")
+                                st.balloons()
+                            else:
+                                st.error("❌ Failed to submit review")
+                
+                elif session_type == "Coffee Shop Review":
+                    st.markdown("**🏪 Submit Your Coffee Shop Review**")
+                    
+                    with st.form(f"shop_eval_{invitation['invitationId']}"):
+                        col_eval1, col_eval2 = st.columns(2)
+                        
+                        with col_eval1:
+                            coffee_rating = st.slider("Coffee Quality", 1, 5, 4, key=f"coffee_rating_{invitation['invitationId']}")
+                            service_rating = st.slider("Service Quality", 1, 5, 4, key=f"service_{invitation['invitationId']}")
+                            ambience_rating = st.slider("Ambience", 1, 5, 4, key=f"ambience_{invitation['invitationId']}")
+                        
+                        with col_eval2:
+                            latte_art_rating = st.slider("Latte Art", 1, 5, 3, key=f"latte_art_{invitation['invitationId']}")
+                            value_rating = st.slider("Value for Money", 1, 5, 3, key=f"shop_value_{invitation['invitationId']}")
+                            would_return = st.checkbox("Would Return", key=f"return_{invitation['invitationId']}")
+                        
+                        flavor_notes = st.text_area("Coffee Notes", placeholder="Notes about the coffee served...", key=f"shop_notes_{invitation['invitationId']}")
+                        ambience_notes = st.text_area("Ambience & Service Notes", placeholder="Music, atmosphere, service...", key=f"shop_ambience_{invitation['invitationId']}")
+                        
+                        submit_eval = st.form_submit_button("🏪 Submit Coffee Shop Review")
+                        
+                        if submit_eval:
+                            evaluation_data = {
+                                'coffee_rating': coffee_rating,
+                                'service_rating': service_rating,
+                                'ambience_rating': ambience_rating,
+                                'latte_art_rating': latte_art_rating,
+                                'value_rating': value_rating,
+                                'would_return': would_return,
+                                'flavor_notes': flavor_notes,
+                                'ambience_notes': ambience_notes,
+                                'evaluation_type': 'coffee_shop'
+                            }
+                            
+                            if invitation_manager.submit_collaborative_evaluation(invitation['invitationId'], user_id, user_name, evaluation_data):
+                                st.success("🎉 Coffee shop review submitted successfully!")
+                                st.balloons()
+                            else:
+                                st.error("❌ Failed to submit review")
 
 def show_send_invitation(invitation_manager, user_id: str, user_name: str):
     """Show form to send cupping invitations"""
@@ -623,21 +740,60 @@ def show_send_invitation(invitation_manager, user_id: str, user_name: str):
     st.markdown("Invite other coffee enthusiasts to join your cupping session!")
     
     with st.form("send_invitation_form"):
-        # Coffee information
-        st.markdown("##### Coffee Details")
-        col1, col2 = st.columns(2)
+        # Session type selection
+        st.markdown("##### Session Type")
+        session_type = st.selectbox("What would you like to share?", 
+            ["Coffee Cupping", "Coffee Bag Review", "Coffee Shop Review"])
         
-        with col1:
-            coffee_name = st.text_input("Coffee Name *", placeholder="e.g., Ethiopia Yirgacheffe")
-            origin = st.text_input("Origin *", placeholder="e.g., Ethiopia")
-            roaster = st.text_input("Roaster", placeholder="e.g., Blue Bottle")
+        # Dynamic form based on session type
+        if session_type == "Coffee Cupping":
+            st.markdown("##### Coffee Details")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                coffee_name = st.text_input("Coffee Name *", placeholder="e.g., Ethiopia Yirgacheffe")
+                origin = st.text_input("Origin *", placeholder="e.g., Ethiopia")
+                roaster = st.text_input("Roaster", placeholder="e.g., Blue Bottle")
+            
+            with col2:
+                processing_method = st.selectbox("Processing Method", 
+                    ["Washed", "Natural", "Honey", "Pulped Natural", "Other"])
+                altitude = st.text_input("Altitude", placeholder="e.g., 1800-2000m")
+                grind_size = st.selectbox("Grind Size", ["Coarse", "Medium", "Fine"])
         
-        with col2:
-            processing_method = st.selectbox("Processing Method", 
-                ["Washed", "Natural", "Honey", "Pulped Natural", "Other"])
-            session_type = st.selectbox("Session Type", 
-                ["Quick Cupping", "Professional Cupping", "Blind Cupping"])
-            altitude = st.text_input("Altitude", placeholder="e.g., 1800-2000m")
+        elif session_type == "Coffee Bag Review":
+            st.markdown("##### Coffee Bag Details")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                coffee_name = st.text_input("Coffee Name *", placeholder="e.g., Guatemala Huehuetenango")
+                origin = st.text_input("Origin *", placeholder="e.g., Guatemala")
+                farm = st.text_input("Farm/Producer", placeholder="e.g., Finca El Injerto")
+                roaster = st.text_input("Roaster", placeholder="e.g., Local Roastery")
+            
+            with col2:
+                roast_level = st.selectbox("Roast Level", ["Light", "Medium-Light", "Medium", "Medium-Dark", "Dark"])
+                grind_type = st.selectbox("Grind Type", ["Whole Bean", "Ground"])
+                processing_method = st.selectbox("Processing Method", 
+                    ["Washed", "Natural", "Honey", "Pulped Natural", "Other"])
+                cost = st.number_input("Cost ($)", min_value=0.0, step=0.01, format="%.2f")
+        
+        elif session_type == "Coffee Shop Review":
+            st.markdown("##### Coffee Shop Details")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                shop_name = st.text_input("Coffee Shop Name *", placeholder="e.g., Blue Bottle Coffee")
+                coffee_name = st.text_input("Coffee Served", placeholder="e.g., Single Origin Espresso")
+                barista_name = st.text_input("Barista Name", placeholder="e.g., Alex")
+                origin = st.text_input("Coffee Origin", placeholder="e.g., Ethiopia")
+            
+            with col2:
+                preparation_method = st.selectbox("Preparation Method", 
+                    ["Espresso", "V60", "Chemex", "Aeropress", "Cold Brew", "French Press", "Other"])
+                roast_level = st.selectbox("Roast Level", ["Light", "Medium-Light", "Medium", "Medium-Dark", "Dark"])
+                machine_type = st.text_input("Machine Type", placeholder="e.g., La Marzocco")
+                location = st.text_input("Location", placeholder="e.g., Downtown, Main St")
         
         # Invitation details
         st.markdown("##### Invitation Details")
@@ -653,24 +809,72 @@ def show_send_invitation(invitation_manager, user_id: str, user_name: str):
             value=f"Hi! {user_name} is inviting you to join a collaborative coffee cupping session. Let's taste and evaluate this coffee together!"
         )
         
-        # Additional session information
-        st.markdown("##### Session Information")
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            brew_method = st.selectbox("Brewing Method", 
-                ["Pour Over", "Espresso", "French Press", "Cupping Bowls", "Other"])
-            grind_size = st.selectbox("Grind Size", 
-                ["Coarse", "Medium-Coarse", "Medium", "Medium-Fine", "Fine"])
-        
-        with col4:
-            water_temp = st.number_input("Water Temperature (°C)", min_value=80, max_value=100, value=93)
-            brew_ratio = st.text_input("Coffee to Water Ratio", placeholder="e.g., 1:15", value="1:15")
+        # Additional session information (only for Coffee Cupping)
+        if session_type == "Coffee Cupping":
+            st.markdown("##### Brewing Parameters")
+            col3, col4 = st.columns(2)
+            
+            with col3:
+                brew_method = st.selectbox("Brewing Method", 
+                    ["Pour Over", "Espresso", "French Press", "Cupping Bowls", "Other"])
+                water_temp = st.number_input("Water Temperature (°C)", min_value=80, max_value=100, value=93)
+            
+            with col4:
+                brew_ratio = st.text_input("Coffee to Water Ratio", placeholder="e.g., 1:15", value="1:15")
+                cupping_notes = st.text_area("Pre-session Notes", placeholder="Any special instructions...")
         
         submit_invitation = st.form_submit_button("📧 Send Invitations", use_container_width=True)
         
         if submit_invitation:
-            if coffee_name and origin and invitee_usernames:
+            # Validate based on session type
+            valid = False
+            session_data = {'session_type': session_type, 'invitation_message': invitation_message}
+            
+            if session_type == "Coffee Cupping":
+                if coffee_name and origin and invitee_usernames:
+                    valid = True
+                    session_data.update({
+                        'coffee_name': coffee_name,
+                        'origin': origin,
+                        'roaster': roaster,
+                        'processing_method': processing_method,
+                        'altitude': altitude,
+                        'grind_size': grind_size,
+                        'brew_method': brew_method,
+                        'water_temp': water_temp,
+                        'brew_ratio': brew_ratio,
+                        'cupping_notes': cupping_notes
+                    })
+            
+            elif session_type == "Coffee Bag Review":
+                if coffee_name and origin and invitee_usernames:
+                    valid = True
+                    session_data.update({
+                        'coffee_name': coffee_name,
+                        'origin': origin,
+                        'farm': farm,
+                        'roaster': roaster,
+                        'roast_level': roast_level,
+                        'grind_type': grind_type,
+                        'processing_method': processing_method,
+                        'cost': cost
+                    })
+            
+            elif session_type == "Coffee Shop Review":
+                if shop_name and invitee_usernames:
+                    valid = True
+                    session_data.update({
+                        'shop_name': shop_name,
+                        'coffee_name': coffee_name,
+                        'barista_name': barista_name,
+                        'origin': origin,
+                        'preparation_method': preparation_method,
+                        'roast_level': roast_level,
+                        'machine_type': machine_type,
+                        'location': location
+                    })
+            
+            if valid and invitee_usernames:
                 # Parse usernames
                 username_list = [username.strip() for username in invitee_usernames.replace('\n', ',').split(',') if username.strip()]
                 
@@ -678,34 +882,24 @@ def show_send_invitation(invitation_manager, user_id: str, user_name: str):
                     st.error("❌ Please enter at least one valid username")
                     return
                 
-                # Prepare session data
-                session_data = {
-                    'coffee_name': coffee_name,
-                    'origin': origin,
-                    'roaster': roaster,
-                    'processing_method': processing_method,
-                    'session_type': session_type,
-                    'altitude': altitude,
-                    'brew_method': brew_method,
-                    'grind_size': grind_size,
-                    'water_temp': water_temp,
-                    'brew_ratio': brew_ratio,
-                    'invitation_message': invitation_message
-                }
-                
                 with st.spinner("Sending invitations..."):
                     invitation_id = invitation_manager.create_invitation(session_data, user_id, user_name, username_list)
                     
                     if invitation_id:
-                        st.success(f"🎉 Invitations sent successfully to {len(username_list)} people!")
+                        st.success(f"🎉 {session_type} invitations sent successfully to {len(username_list)} people!")
                         st.balloons()
-                        st.info(f"📧 Invited cuppers will see this invitation when they log in to their own accounts")
+                        st.info(f"📧 Invited users will see this {session_type.lower()} invitation when they log in to their own accounts")
                         st.warning(f"⚠️ Make sure the invited people have accounts in this app and know to check their 'Collaborative' tab!")
                         st.info(f"Invitation ID: {invitation_id}")
                     else:
                         st.error("❌ Failed to send invitations")
             else:
-                st.error("❌ Please fill in required fields: Coffee Name, Origin, and Usernames")
+                required_fields = {
+                    "Coffee Cupping": "Coffee Name, Origin, and Usernames",
+                    "Coffee Bag Review": "Coffee Name, Origin, and Usernames", 
+                    "Coffee Shop Review": "Shop Name and Usernames"
+                }
+                st.error(f"❌ Please fill in required fields: {required_fields[session_type]}")
 
 def show_collaborative_sessions(invitation_manager, user_id: str, user_id_param: str):
     """Show collaborative cupping sessions and results"""
