@@ -18,23 +18,37 @@ class UserDatabase:
         """Initialize Firestore connection"""
         if not firebase_admin._apps:
             try:
+                firebase_config = None
+                
                 # Check if running in Streamlit Cloud (secrets) or locally (.env file)
-                if hasattr(st, 'secrets') and 'FIREBASE_PROJECT_ID' in st.secrets:
-                    # Running in Streamlit Cloud - use secrets
-                    firebase_config = {
-                        "type": st.secrets["FIREBASE_TYPE"],
-                        "project_id": st.secrets["FIREBASE_PROJECT_ID"],
-                        "private_key_id": st.secrets["FIREBASE_PRIVATE_KEY_ID"],
-                        "private_key": st.secrets["FIREBASE_PRIVATE_KEY"].replace('\\n', '\n'),
-                        "client_email": st.secrets["FIREBASE_CLIENT_EMAIL"],
-                        "client_id": st.secrets["FIREBASE_CLIENT_ID"],
-                        "auth_uri": st.secrets["FIREBASE_AUTH_URI"],
-                        "token_uri": st.secrets["FIREBASE_TOKEN_URI"],
-                        "auth_provider_x509_cert_url": st.secrets["FIREBASE_AUTH_PROVIDER_X509_CERT_URL"],
-                        "client_x509_cert_url": st.secrets["FIREBASE_CLIENT_X509_CERT_URL"]
-                    }
+                if hasattr(st, 'secrets') and len(st.secrets) > 0:
+                    st.info("🔍 Detected Streamlit Cloud environment")
+                    try:
+                        # Check if Firebase secrets exist
+                        if 'FIREBASE_PROJECT_ID' in st.secrets:
+                            firebase_config = {
+                                "type": str(st.secrets["FIREBASE_TYPE"]),
+                                "project_id": str(st.secrets["FIREBASE_PROJECT_ID"]),
+                                "private_key_id": str(st.secrets["FIREBASE_PRIVATE_KEY_ID"]),
+                                "private_key": str(st.secrets["FIREBASE_PRIVATE_KEY"]).replace('\\n', '\n'),
+                                "client_email": str(st.secrets["FIREBASE_CLIENT_EMAIL"]),
+                                "client_id": str(st.secrets["FIREBASE_CLIENT_ID"]),
+                                "auth_uri": str(st.secrets["FIREBASE_AUTH_URI"]),
+                                "token_uri": str(st.secrets["FIREBASE_TOKEN_URI"]),
+                                "auth_provider_x509_cert_url": str(st.secrets["FIREBASE_AUTH_PROVIDER_X509_CERT_URL"]),
+                                "client_x509_cert_url": str(st.secrets["FIREBASE_CLIENT_X509_CERT_URL"])
+                            }
+                            st.success("✅ Firebase secrets loaded from Streamlit Cloud")
+                        else:
+                            st.error("❌ Firebase secrets not found in Streamlit Cloud")
+                            st.info("Available secrets: " + str(list(st.secrets.keys())))
+                            return None
+                    except Exception as e:
+                        st.error(f"❌ Error accessing Streamlit secrets: {e}")
+                        return None
+                        
                 elif os.path.exists('.env'):
-                    # Running locally - use .env file
+                    st.info("🔍 Detected local environment")
                     firebase_config = {
                         "type": os.getenv("FIREBASE_TYPE"),
                         "project_id": os.getenv("FIREBASE_PROJECT_ID"),
@@ -47,6 +61,7 @@ class UserDatabase:
                         "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
                         "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
                     }
+                    st.success("✅ Firebase config loaded from .env file")
                 else:
                     st.error("❌ Firebase configuration not found")
                     st.info("For local development: create .env file from .env.example")
@@ -59,22 +74,45 @@ class UserDatabase:
                 
                 if missing_fields:
                     st.error(f"❌ Missing Firebase configuration: {', '.join(missing_fields)}")
-                    st.info("Please check your .env file and ensure all Firebase credentials are filled in")
+                    with st.expander("Debug Info"):
+                        st.write("Config keys:", list(firebase_config.keys()))
+                        st.write("Project ID:", firebase_config.get('project_id', 'MISSING'))
+                        st.write("Client Email:", firebase_config.get('client_email', 'MISSING'))
+                        st.write("Has Private Key:", bool(firebase_config.get('private_key')))
                     return None
                 
+                st.info("🔑 Initializing Firebase credentials...")
                 cred = credentials.Certificate(firebase_config)
+                
+                st.info("🚀 Connecting to Firebase...")
                 firebase_admin.initialize_app(cred)
-                st.success("✅ Firebase connected successfully!")
+                
+                st.info("📊 Testing Firestore connection...")
+                db = firestore.client()
+                
+                # Test basic connection
+                test_ref = db.collection('_test').document('connection')
+                test_ref.set({'test': True, 'timestamp': firestore.SERVER_TIMESTAMP})
+                test_ref.delete()  # Clean up test
+                
+                st.success("✅ Firebase connected and tested successfully!")
+                return db
                 
             except Exception as e:
                 st.error(f"❌ Firebase initialization failed: {str(e)}")
-                st.info("Please check your Firebase configuration in the .env file")
                 with st.expander("Debug Info"):
                     st.write(f"Error details: {e}")
-                    st.write(f"Project ID: {os.getenv('FIREBASE_PROJECT_ID', 'Not set')}")
-                    st.write(f"Client Email: {os.getenv('FIREBASE_CLIENT_EMAIL', 'Not set')}")
+                    st.write(f"Error type: {type(e).__name__}")
+                    if hasattr(st, 'secrets') and len(st.secrets) > 0:
+                        st.write("Environment: Streamlit Cloud")
+                        st.write("Available secrets:", list(st.secrets.keys()))
+                    else:
+                        st.write("Environment: Local")
+                        st.write(f"Project ID: {os.getenv('FIREBASE_PROJECT_ID', 'Not set')}")
+                        st.write(f"Client Email: {os.getenv('FIREBASE_CLIENT_EMAIL', 'Not set')}")
                 return None
         
+        # If firebase_admin was already initialized, just return the client
         return firestore.client()
     
     def create_user(self, email: str, username: str, password_hash: str) -> bool:
