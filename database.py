@@ -8,6 +8,7 @@ from firebase import get_firestore_db
 from cuppings import get_cupping_manager
 from coffee_shops import get_coffee_shop_manager
 from coffee_bags import get_coffee_bag_manager
+from cupper_invitations import get_cupper_invitation_manager
 
 
 class UserDatabase:
@@ -18,6 +19,7 @@ class UserDatabase:
         self.cupping_manager = get_cupping_manager()
         self.coffee_shop_manager = get_coffee_shop_manager()
         self.coffee_bag_manager = get_coffee_bag_manager()
+        self.invitation_manager = get_cupper_invitation_manager()
     
     # Legacy user methods - delegate to AuthManager (imported in main apps)
     def create_user(self, email: str, username: str, password_hash: str) -> bool:
@@ -141,3 +143,25 @@ class UserDatabase:
     def get_coffee_bag_stats(self, user_id: str) -> Dict:
         """Get coffee bag statistics for a user"""
         return self.coffee_bag_manager.get_user_bag_stats(user_id)
+    
+    # Cupper Invitation methods - delegate to CupperInvitationManager
+    def create_cupping_invitation(self, session_data: Dict, inviter_id: str, inviter_name: str, invitee_emails: List[str]) -> bool:
+        """Create a cupping invitation"""
+        try:
+            invitation_id = self.invitation_manager.create_invitation(session_data, inviter_id, inviter_name, invitee_emails)
+            return invitation_id is not None
+        except Exception as e:
+            st.error(f"Error creating invitation: {e}")
+            return False
+    
+    def get_user_invitations(self, user_email: str) -> List[Dict]:
+        """Get invitations for a user"""
+        return self.invitation_manager.get_user_invitations(user_email)
+    
+    def respond_to_invitation(self, invitation_id: str, user_email: str, response: str, user_name: str) -> bool:
+        """Respond to an invitation"""
+        return self.invitation_manager.respond_to_invitation(invitation_id, user_email, response, user_name)
+    
+    def submit_collaborative_evaluation(self, invitation_id: str, user_email: str, user_name: str, evaluation_data: Dict) -> bool:
+        """Submit evaluation for collaborative session"""
+        return self.invitation_manager.submit_collaborative_evaluation(invitation_id, user_email, user_name, evaluation_data)

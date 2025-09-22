@@ -2,6 +2,7 @@ import streamlit as st
 from auth import AuthManager
 from coffee_shops import get_coffee_shop_manager
 from coffee_bags import get_coffee_bag_manager
+from cupper_invitations import get_cupper_invitation_manager
 from firebase import upload_image_to_storage
 import datetime
 
@@ -285,7 +286,7 @@ def show_main_app(auth_manager):
     """, unsafe_allow_html=True)
     
     # Main app tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "📦 Coffee Bags", "⚙️ Settings"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "📦 Coffee Bags", "👥 Collaborative", "⚙️ Settings"])
     
     with tab1:
         show_dashboard(auth_manager)
@@ -300,6 +301,9 @@ def show_main_app(auth_manager):
         show_coffee_bags(auth_manager)
     
     with tab5:
+        show_collaborative_cupping(auth_manager)
+    
+    with tab6:
         show_settings(auth_manager)
 
 def show_user_sidebar(auth_manager):
@@ -482,6 +486,315 @@ def show_my_cuppings(auth_manager):
                         st.error("❌ Failed to save cupping")
             else:
                 st.error("❌ Please fill in required fields")
+
+def show_collaborative_cupping(auth_manager):
+    """Show collaborative cupping section"""
+    st.markdown("### 👥 Collaborative Cupping")
+    
+    current_user = auth_manager.get_current_user()
+    if not current_user:
+        st.error("❌ User not found")
+        return
+    
+    user_id = current_user['user_id']
+    user_email = current_user['email']
+    user_name = auth_manager.get_display_name()
+    invitation_manager = get_cupper_invitation_manager()
+    
+    # Tabs for different collaborative features
+    collab_tab1, collab_tab2, collab_tab3, collab_tab4 = st.tabs([
+        "📨 Invitations", "✉️ Send Invite", "📊 Sessions", "🔔 Notifications"
+    ])
+    
+    with collab_tab1:
+        show_received_invitations(invitation_manager, user_email, user_name)
+    
+    with collab_tab2:
+        show_send_invitation(invitation_manager, user_id, user_name)
+    
+    with collab_tab3:
+        show_collaborative_sessions(invitation_manager, user_id, user_email)
+    
+    with collab_tab4:
+        show_notifications(invitation_manager, user_email)
+
+def show_received_invitations(invitation_manager, user_email: str, user_name: str):
+    """Show received cupping invitations"""
+    st.markdown("#### 📨 Received Invitations")
+    
+    invitations = invitation_manager.get_user_invitations(user_email)
+    
+    if not invitations:
+        st.info("📝 No pending invitations. When someone invites you to a cupping session, it will appear here!")
+        return
+    
+    for invitation in invitations:
+        session_data = invitation.get('sessionData', {})
+        inviter_name = invitation.get('inviterName', 'Unknown')
+        created_at = invitation.get('createdAt')
+        responses = invitation.get('responses', {})
+        user_response = responses.get(user_email, {})
+        
+        with st.expander(f"☕ {session_data.get('coffee_name', 'Coffee Cupping')} - from {inviter_name}"):
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                st.write(f"**Inviter:** {inviter_name}")
+                st.write(f"**Coffee:** {session_data.get('coffee_name', 'N/A')}")
+                st.write(f"**Origin:** {session_data.get('origin', 'N/A')}")
+                st.write(f"**Session Type:** {session_data.get('session_type', 'Quick Cupping')}")
+                if created_at:
+                    st.write(f"**Invited:** {created_at.strftime('%Y-%m-%d %H:%M') if hasattr(created_at, 'strftime') else str(created_at)}")
+            
+            with col2:
+                if user_response:
+                    st.success(f"✅ You {user_response['response']}ed this invitation")
+                else:
+                    col_accept, col_decline = st.columns(2)
+                    
+                    with col_accept:
+                        if st.button("✅ Accept", key=f"accept_{invitation['invitationId']}"):
+                            if invitation_manager.respond_to_invitation(invitation['invitationId'], user_email, 'accept', user_name):
+                                st.success("Invitation accepted!")
+                                st.rerun()
+                    
+                    with col_decline:
+                        if st.button("❌ Decline", key=f"decline_{invitation['invitationId']}"):
+                            if invitation_manager.respond_to_invitation(invitation['invitationId'], user_email, 'decline', user_name):
+                                st.success("Invitation declined")
+                                st.rerun()
+            
+            # Show evaluation form if accepted
+            if user_response and user_response.get('response') == 'accept':
+                st.markdown("---")
+                st.markdown("**🥤 Submit Your Cupping Evaluation**")
+                
+                with st.form(f"collab_eval_{invitation['invitationId']}"):
+                    col_eval1, col_eval2 = st.columns(2)
+                    
+                    with col_eval1:
+                        overall_score = st.slider("Overall Score", 0, 100, 80, key=f"overall_{invitation['invitationId']}")
+                        aroma = st.slider("Aroma", 0, 10, 7, key=f"aroma_{invitation['invitationId']}")
+                        flavor = st.slider("Flavor", 0, 10, 7, key=f"flavor_{invitation['invitationId']}")
+                    
+                    with col_eval2:
+                        acidity = st.slider("Acidity", 0, 10, 7, key=f"acidity_{invitation['invitationId']}")
+                        body = st.slider("Body", 0, 10, 7, key=f"body_{invitation['invitationId']}")
+                        aftertaste = st.slider("Aftertaste", 0, 10, 7, key=f"aftertaste_{invitation['invitationId']}")
+                    
+                    flavor_notes = st.text_area("Flavor Notes", placeholder="chocolate, citrus, floral...", key=f"notes_{invitation['invitationId']}")
+                    additional_notes = st.text_area("Additional Notes", key=f"add_notes_{invitation['invitationId']}")
+                    
+                    submit_eval = st.form_submit_button("📊 Submit Evaluation")
+                    
+                    if submit_eval:
+                        evaluation_data = {
+                            'overall_score': overall_score,
+                            'aroma': aroma,
+                            'flavor': flavor,
+                            'acidity': acidity,
+                            'body': body,
+                            'aftertaste': aftertaste,
+                            'flavor_notes': flavor_notes,
+                            'additional_notes': additional_notes
+                        }
+                        
+                        if invitation_manager.submit_collaborative_evaluation(invitation['invitationId'], user_email, user_name, evaluation_data):
+                            st.success("🎉 Evaluation submitted successfully!")
+                            st.balloons()
+                        else:
+                            st.error("❌ Failed to submit evaluation")
+
+def show_send_invitation(invitation_manager, user_id: str, user_name: str):
+    """Show form to send cupping invitations"""
+    st.markdown("#### ✉️ Invite Cuppers")
+    st.markdown("Invite other coffee enthusiasts to join your cupping session!")
+    
+    with st.form("send_invitation_form"):
+        # Coffee information
+        st.markdown("##### Coffee Details")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            coffee_name = st.text_input("Coffee Name *", placeholder="e.g., Ethiopia Yirgacheffe")
+            origin = st.text_input("Origin *", placeholder="e.g., Ethiopia")
+            roaster = st.text_input("Roaster", placeholder="e.g., Blue Bottle")
+        
+        with col2:
+            processing_method = st.selectbox("Processing Method", 
+                ["Washed", "Natural", "Honey", "Pulped Natural", "Other"])
+            session_type = st.selectbox("Session Type", 
+                ["Quick Cupping", "Professional Cupping", "Blind Cupping"])
+            altitude = st.text_input("Altitude", placeholder="e.g., 1800-2000m")
+        
+        # Invitation details
+        st.markdown("##### Invitation Details")
+        invitee_emails = st.text_area(
+            "Invitee Email Addresses *", 
+            placeholder="Enter email addresses separated by commas\ne.g., friend1@email.com, friend2@email.com",
+            help="Enter the email addresses of people you want to invite"
+        )
+        
+        invitation_message = st.text_area(
+            "Personal Message", 
+            placeholder="Add a personal message to your invitation...",
+            value=f"Hi! {user_name} is inviting you to join a collaborative coffee cupping session. Let's taste and evaluate this coffee together!"
+        )
+        
+        # Additional session information
+        st.markdown("##### Session Information")
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            brew_method = st.selectbox("Brewing Method", 
+                ["Pour Over", "Espresso", "French Press", "Cupping Bowls", "Other"])
+            grind_size = st.selectbox("Grind Size", 
+                ["Coarse", "Medium-Coarse", "Medium", "Medium-Fine", "Fine"])
+        
+        with col4:
+            water_temp = st.number_input("Water Temperature (°C)", min_value=80, max_value=100, value=93)
+            brew_ratio = st.text_input("Coffee to Water Ratio", placeholder="e.g., 1:15", value="1:15")
+        
+        submit_invitation = st.form_submit_button("📧 Send Invitations", use_container_width=True)
+        
+        if submit_invitation:
+            if coffee_name and origin and invitee_emails:
+                # Parse email addresses
+                email_list = [email.strip() for email in invitee_emails.replace('\n', ',').split(',') if email.strip()]
+                
+                if not email_list:
+                    st.error("❌ Please enter at least one valid email address")
+                    return
+                
+                # Prepare session data
+                session_data = {
+                    'coffee_name': coffee_name,
+                    'origin': origin,
+                    'roaster': roaster,
+                    'processing_method': processing_method,
+                    'session_type': session_type,
+                    'altitude': altitude,
+                    'brew_method': brew_method,
+                    'grind_size': grind_size,
+                    'water_temp': water_temp,
+                    'brew_ratio': brew_ratio,
+                    'invitation_message': invitation_message
+                }
+                
+                with st.spinner("Sending invitations..."):
+                    invitation_id = invitation_manager.create_invitation(session_data, user_id, user_name, email_list)
+                    
+                    if invitation_id:
+                        st.success(f"🎉 Invitations sent successfully to {len(email_list)} people!")
+                        st.balloons()
+                        st.info(f"Invitation ID: {invitation_id}")
+                    else:
+                        st.error("❌ Failed to send invitations")
+            else:
+                st.error("❌ Please fill in required fields: Coffee Name, Origin, and Email Addresses")
+
+def show_collaborative_sessions(invitation_manager, user_id: str, user_email: str):
+    """Show collaborative cupping sessions and results"""
+    st.markdown("#### 📊 My Collaborative Sessions")
+    
+    # Show sent invitations and their status
+    sent_invitations = invitation_manager.get_user_sent_invitations(user_id)
+    
+    if sent_invitations:
+        st.markdown("##### Sessions You Created")
+        for invitation in sent_invitations[:5]:  # Show last 5
+            session_data = invitation.get('sessionData', {})
+            responses = invitation.get('responses', {})
+            evaluations = invitation.get('participantEvaluations', {})
+            
+            # Count responses
+            accepted = sum(1 for r in responses.values() if r.get('response') == 'accept')
+            declined = sum(1 for r in responses.values() if r.get('response') == 'decline')
+            pending = len(invitation.get('inviteeEmails', [])) - len(responses)
+            
+            with st.expander(f"☕ {session_data.get('coffee_name', 'Unknown')} - {accepted} accepted, {len(evaluations)} evaluated"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**Coffee:** {session_data.get('coffee_name', 'N/A')}")
+                    st.write(f"**Origin:** {session_data.get('origin', 'N/A')}")
+                    st.write(f"**Session Type:** {session_data.get('session_type', 'N/A')}")
+                    st.write(f"**Invited:** {len(invitation.get('inviteeEmails', []))} people")
+                
+                with col2:
+                    st.write(f"**Responses:** ✅ {accepted} | ❌ {declined} | ⏳ {pending}")
+                    st.write(f"**Evaluations Received:** {len(evaluations)}")
+                    created_at = invitation.get('createdAt')
+                    if created_at:
+                        st.write(f"**Created:** {created_at.strftime('%Y-%m-%d') if hasattr(created_at, 'strftime') else str(created_at)}")
+                
+                # Show results if evaluations exist
+                if evaluations:
+                    st.markdown("**📈 Session Results**")
+                    results = invitation_manager.get_collaborative_session_results(invitation['invitationId'])
+                    
+                    if results.get('average_scores'):
+                        avg_scores = results['average_scores']
+                        col_r1, col_r2, col_r3 = st.columns(3)
+                        
+                        with col_r1:
+                            st.metric("Avg Overall", f"{avg_scores.get('overall_score', 0):.1f}/100")
+                            st.metric("Avg Aroma", f"{avg_scores.get('aroma', 0):.1f}/10")
+                        
+                        with col_r2:
+                            st.metric("Avg Flavor", f"{avg_scores.get('flavor', 0):.1f}/10")
+                            st.metric("Avg Acidity", f"{avg_scores.get('acidity', 0):.1f}/10")
+                        
+                        with col_r3:
+                            st.metric("Avg Body", f"{avg_scores.get('body', 0):.1f}/10")
+                            st.metric("Participants", results.get('participants', 0))
+                    
+                    # Show individual evaluations
+                    with st.expander("👥 Individual Evaluations"):
+                        for individual in results.get('individual_results', []):
+                            eval_data = individual.get('evaluation', {})
+                            st.markdown(f"**{individual.get('userName', 'Anonymous')}:**")
+                            st.write(f"Overall: {eval_data.get('overall_score', 0)}/100, "
+                                   f"Aroma: {eval_data.get('aroma', 0)}/10, "
+                                   f"Flavor: {eval_data.get('flavor', 0)}/10")
+                            if eval_data.get('flavor_notes'):
+                                st.write(f"Notes: {eval_data['flavor_notes']}")
+                            st.markdown("---")
+    
+    else:
+        st.info("📝 You haven't created any collaborative sessions yet. Use the 'Send Invite' tab to start your first session!")
+
+def show_notifications(invitation_manager, user_email: str):
+    """Show user notifications"""
+    st.markdown("#### 🔔 Notifications")
+    
+    notifications = invitation_manager.get_user_notifications(user_email)
+    
+    if not notifications:
+        st.info("📝 No notifications yet. You'll receive notifications when someone invites you to cupping sessions!")
+        return
+    
+    for notification in notifications:
+        is_read = notification.get('isRead', False)
+        notification_type = notification.get('type', 'general')
+        message = notification.get('message', 'No message')
+        created_at = notification.get('createdAt')
+        
+        # Style based on read status
+        if is_read:
+            st.markdown(f"📧 {message}")
+        else:
+            st.markdown(f"**📧 {message}**")
+        
+        if created_at:
+            st.caption(f"📅 {created_at.strftime('%Y-%m-%d %H:%M') if hasattr(created_at, 'strftime') else str(created_at)}")
+        
+        if not is_read:
+            if st.button("Mark as Read", key=f"read_{notification['notificationId']}"):
+                if invitation_manager.mark_notification_as_read(notification['notificationId']):
+                    st.rerun()
+        
+        st.markdown("---")
 
 def show_settings(auth_manager):
     """Show user settings"""
