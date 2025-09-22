@@ -285,7 +285,7 @@ def show_main_app(auth_manager):
     """, unsafe_allow_html=True)
     
     # Main app tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "📦 Coffee Bags", "⚙️ Settings"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "📦 Coffee Bags", "👥 Collaborative", "⚙️ Settings"])
     
     with tab1:
         show_dashboard(auth_manager)
@@ -300,6 +300,9 @@ def show_main_app(auth_manager):
         show_coffee_bags(auth_manager)
     
     with tab5:
+        show_collaborative_cupping(auth_manager)
+    
+    with tab6:
         show_settings(auth_manager)
 
 def show_user_sidebar(auth_manager):
@@ -703,6 +706,87 @@ def show_coffee_bags(auth_manager):
                         st.error("❌ Failed to save coffee bag")
             else:
                 st.error("❌ Please fill in all required fields: Coffee Name, Origin, Roast Level, Grind Type, and Preparation Method")
+
+def show_collaborative_cupping(auth_manager):
+    """Show collaborative cupping section"""
+    st.markdown("### 👥 Collaborative Cupping")
+    
+    current_user = auth_manager.get_current_user()
+    if not current_user:
+        st.error("❌ User not found")
+        return
+    
+    user_id = current_user['user_id']
+    user_name = auth_manager.get_display_name()
+    invitation_manager = get_cupper_invitation_manager()
+    
+    # Simple tabs for minimal version
+    collab_tab1, collab_tab2 = st.tabs(["📨 Invitations", "✉️ Send Invite"])
+    
+    with collab_tab1:
+        st.markdown("#### 📨 Invitations Received")
+        st.info("💡 These are invitations sent to YOU. Each cupper evaluates from their own device/account.")
+        
+        invitations = invitation_manager.get_user_invitations(user_id)
+        
+        if not invitations:
+            st.success("📝 No pending invitations.")
+            return
+        
+        for invitation in invitations:
+            session_data = invitation.get('sessionData', {})
+            inviter_name = invitation.get('inviterName', 'Unknown')
+            responses = invitation.get('responses', {})
+            user_response = responses.get(user_id, {})
+            
+            with st.expander(f"☕ {session_data.get('coffee_name', 'Coffee')} - from {inviter_name}"):
+                if user_response:
+                    st.success(f"✅ You {user_response['response']}ed this invitation")
+                else:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ Accept", key=f"accept_{invitation['invitationId']}"):
+                            invitation_manager.respond_to_invitation(invitation['invitationId'], user_id, 'accept', user_name)
+                            st.rerun()
+                    with col2:
+                        if st.button("❌ Decline", key=f"decline_{invitation['invitationId']}"):
+                            invitation_manager.respond_to_invitation(invitation['invitationId'], user_id, 'decline', user_name)
+                            st.rerun()
+                
+                # Simple evaluation form
+                if user_response and user_response.get('response') == 'accept':
+                    with st.form(f"eval_{invitation['invitationId']}"):
+                        overall_score = st.slider("Overall Score", 0, 100, 80, key=f"overall_{invitation['invitationId']}")
+                        flavor_notes = st.text_area("Flavor Notes", key=f"notes_{invitation['invitationId']}")
+                        
+                        if st.form_submit_button("Submit Evaluation"):
+                            evaluation_data = {'overall_score': overall_score, 'flavor_notes': flavor_notes}
+                            if invitation_manager.submit_collaborative_evaluation(invitation['invitationId'], user_id, user_name, evaluation_data):
+                                st.success("🎉 Evaluation submitted!")
+                                st.balloons()
+    
+    with collab_tab2:
+        st.markdown("#### ✉️ Invite Cuppers")
+        st.info("💡 Invited cuppers will see the invitation in THEIR own dashboard.")
+        
+        with st.form("invite_form"):
+            coffee_name = st.text_input("Coffee Name *")
+            origin = st.text_input("Origin *")
+            usernames = st.text_area("Usernames to Invite *", placeholder="username1, username2")
+            
+            if st.form_submit_button("📧 Send Invitations"):
+                if coffee_name and origin and usernames:
+                    username_list = [u.strip() for u in usernames.split(',') if u.strip()]
+                    session_data = {'coffee_name': coffee_name, 'origin': origin, 'session_type': 'Quick Cupping'}
+                    
+                    invitation_id = invitation_manager.create_invitation(session_data, user_id, user_name, username_list)
+                    if invitation_id:
+                        st.success(f"🎉 Invitations sent to {len(username_list)} people!")
+                        st.balloons()
+                    else:
+                        st.error("❌ Failed to send invitations")
+                else:
+                    st.error("❌ Please fill in all required fields")
 
 def show_footer():
     """Show footer with copyright"""
