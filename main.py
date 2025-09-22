@@ -332,6 +332,16 @@ def show_dashboard(auth_manager):
     current_user = auth_manager.get_current_user()
     if current_user:
         user_id = current_user['user_id']
+        user_email = current_user['email']
+        
+        # Check for pending invitations first
+        invitation_manager = get_cupper_invitation_manager()
+        pending_invitations = invitation_manager.get_user_invitations(user_id)
+        
+        # Show invitation alert if there are pending invitations
+        if pending_invitations:
+            st.warning(f"🔔 You have {len(pending_invitations)} pending cupping invitation(s)! Check the 'Collaborative' tab to respond.")
+        
         cupping_stats = st.session_state.db_manager.get_cupping_stats(user_id)
         
         # Get coffee shop review stats
@@ -507,25 +517,26 @@ def show_collaborative_cupping(auth_manager):
     ])
     
     with collab_tab1:
-        show_received_invitations(invitation_manager, user_email, user_name)
+        show_received_invitations(invitation_manager, user_id, user_name)
     
     with collab_tab2:
         show_send_invitation(invitation_manager, user_id, user_name)
     
     with collab_tab3:
-        show_collaborative_sessions(invitation_manager, user_id, user_email)
+        show_collaborative_sessions(invitation_manager, user_id, user_id)
     
     with collab_tab4:
-        show_notifications(invitation_manager, user_email)
+        show_notifications(invitation_manager, user_id)
 
-def show_received_invitations(invitation_manager, user_email: str, user_name: str):
-    """Show received cupping invitations"""
-    st.markdown("#### 📨 Received Invitations")
+def show_received_invitations(invitation_manager, user_id: str, user_name: str):
+    """Show received cupping invitations - these appear in YOUR own dashboard"""
+    st.markdown("#### 📨 Invitations Received")
+    st.info("💡 These are invitations sent to YOU. Each cupper evaluates from their own device/account.")
     
-    invitations = invitation_manager.get_user_invitations(user_email)
+    invitations = invitation_manager.get_user_invitations(user_id)
     
     if not invitations:
-        st.info("📝 No pending invitations. When someone invites you to a cupping session, it will appear here!")
+        st.success("📝 No pending invitations. When someone invites you to a cupping session, it will appear here in YOUR dashboard!")
         return
     
     for invitation in invitations:
@@ -533,7 +544,7 @@ def show_received_invitations(invitation_manager, user_email: str, user_name: st
         inviter_name = invitation.get('inviterName', 'Unknown')
         created_at = invitation.get('createdAt')
         responses = invitation.get('responses', {})
-        user_response = responses.get(user_email, {})
+        user_response = responses.get(user_id, {})
         
         with st.expander(f"☕ {session_data.get('coffee_name', 'Coffee Cupping')} - from {inviter_name}"):
             col1, col2 = st.columns([2, 1])
@@ -554,13 +565,13 @@ def show_received_invitations(invitation_manager, user_email: str, user_name: st
                     
                     with col_accept:
                         if st.button("✅ Accept", key=f"accept_{invitation['invitationId']}"):
-                            if invitation_manager.respond_to_invitation(invitation['invitationId'], user_email, 'accept', user_name):
+                            if invitation_manager.respond_to_invitation(invitation['invitationId'], user_id, 'accept', user_name):
                                 st.success("Invitation accepted!")
                                 st.rerun()
                     
                     with col_decline:
                         if st.button("❌ Decline", key=f"decline_{invitation['invitationId']}"):
-                            if invitation_manager.respond_to_invitation(invitation['invitationId'], user_email, 'decline', user_name):
+                            if invitation_manager.respond_to_invitation(invitation['invitationId'], user_id, 'decline', user_name):
                                 st.success("Invitation declined")
                                 st.rerun()
             
@@ -599,7 +610,7 @@ def show_received_invitations(invitation_manager, user_email: str, user_name: st
                             'additional_notes': additional_notes
                         }
                         
-                        if invitation_manager.submit_collaborative_evaluation(invitation['invitationId'], user_email, user_name, evaluation_data):
+                        if invitation_manager.submit_collaborative_evaluation(invitation['invitationId'], user_id, user_name, evaluation_data):
                             st.success("🎉 Evaluation submitted successfully!")
                             st.balloons()
                         else:
@@ -607,7 +618,8 @@ def show_received_invitations(invitation_manager, user_email: str, user_name: st
 
 def show_send_invitation(invitation_manager, user_id: str, user_name: str):
     """Show form to send cupping invitations"""
-    st.markdown("#### ✉️ Invite Cuppers")
+    st.markdown("#### ✉️ Invite Cuppers to Collaborative Session")
+    st.info("💡 Invited cuppers will see the invitation in THEIR own dashboard when they log in to the app. Each person evaluates from their own device/account.")
     st.markdown("Invite other coffee enthusiasts to join your cupping session!")
     
     with st.form("send_invitation_form"):
@@ -629,10 +641,10 @@ def show_send_invitation(invitation_manager, user_id: str, user_name: str):
         
         # Invitation details
         st.markdown("##### Invitation Details")
-        invitee_emails = st.text_area(
-            "Invitee Email Addresses *", 
-            placeholder="Enter email addresses separated by commas\ne.g., friend1@email.com, friend2@email.com",
-            help="Enter the email addresses of people you want to invite"
+        invitee_usernames = st.text_area(
+            "Usernames to Invite *", 
+            placeholder="Enter usernames separated by commas\ne.g., coffeeexpert1, barista_pro, latteartist",
+            help="✅ Enter usernames of people who ALREADY have accounts in this app. They will see the invitation when they log in to their own account."
         )
         
         invitation_message = st.text_area(
@@ -658,12 +670,12 @@ def show_send_invitation(invitation_manager, user_id: str, user_name: str):
         submit_invitation = st.form_submit_button("📧 Send Invitations", use_container_width=True)
         
         if submit_invitation:
-            if coffee_name and origin and invitee_emails:
-                # Parse email addresses
-                email_list = [email.strip() for email in invitee_emails.replace('\n', ',').split(',') if email.strip()]
+            if coffee_name and origin and invitee_usernames:
+                # Parse usernames
+                username_list = [username.strip() for username in invitee_usernames.replace('\n', ',').split(',') if username.strip()]
                 
-                if not email_list:
-                    st.error("❌ Please enter at least one valid email address")
+                if not username_list:
+                    st.error("❌ Please enter at least one valid username")
                     return
                 
                 # Prepare session data
@@ -682,18 +694,20 @@ def show_send_invitation(invitation_manager, user_id: str, user_name: str):
                 }
                 
                 with st.spinner("Sending invitations..."):
-                    invitation_id = invitation_manager.create_invitation(session_data, user_id, user_name, email_list)
+                    invitation_id = invitation_manager.create_invitation(session_data, user_id, user_name, username_list)
                     
                     if invitation_id:
-                        st.success(f"🎉 Invitations sent successfully to {len(email_list)} people!")
+                        st.success(f"🎉 Invitations sent successfully to {len(username_list)} people!")
                         st.balloons()
+                        st.info(f"📧 Invited cuppers will see this invitation when they log in to their own accounts")
+                        st.warning(f"⚠️ Make sure the invited people have accounts in this app and know to check their 'Collaborative' tab!")
                         st.info(f"Invitation ID: {invitation_id}")
                     else:
                         st.error("❌ Failed to send invitations")
             else:
-                st.error("❌ Please fill in required fields: Coffee Name, Origin, and Email Addresses")
+                st.error("❌ Please fill in required fields: Coffee Name, Origin, and Usernames")
 
-def show_collaborative_sessions(invitation_manager, user_id: str, user_email: str):
+def show_collaborative_sessions(invitation_manager, user_id: str, user_id_param: str):
     """Show collaborative cupping sessions and results"""
     st.markdown("#### 📊 My Collaborative Sessions")
     
@@ -710,7 +724,7 @@ def show_collaborative_sessions(invitation_manager, user_id: str, user_email: st
             # Count responses
             accepted = sum(1 for r in responses.values() if r.get('response') == 'accept')
             declined = sum(1 for r in responses.values() if r.get('response') == 'decline')
-            pending = len(invitation.get('inviteeEmails', [])) - len(responses)
+            pending = len(invitation.get('inviteeUsers', [])) - len(responses)
             
             with st.expander(f"☕ {session_data.get('coffee_name', 'Unknown')} - {accepted} accepted, {len(evaluations)} evaluated"):
                 col1, col2 = st.columns(2)
@@ -719,7 +733,7 @@ def show_collaborative_sessions(invitation_manager, user_id: str, user_email: st
                     st.write(f"**Coffee:** {session_data.get('coffee_name', 'N/A')}")
                     st.write(f"**Origin:** {session_data.get('origin', 'N/A')}")
                     st.write(f"**Session Type:** {session_data.get('session_type', 'N/A')}")
-                    st.write(f"**Invited:** {len(invitation.get('inviteeEmails', []))} people")
+                    st.write(f"**Invited:** {len(invitation.get('inviteeUsers', []))} people")
                 
                 with col2:
                     st.write(f"**Responses:** ✅ {accepted} | ❌ {declined} | ⏳ {pending}")
@@ -764,11 +778,11 @@ def show_collaborative_sessions(invitation_manager, user_id: str, user_email: st
     else:
         st.info("📝 You haven't created any collaborative sessions yet. Use the 'Send Invite' tab to start your first session!")
 
-def show_notifications(invitation_manager, user_email: str):
+def show_notifications(invitation_manager, user_id: str):
     """Show user notifications"""
     st.markdown("#### 🔔 Notifications")
     
-    notifications = invitation_manager.get_user_notifications(user_email)
+    notifications = invitation_manager.get_user_notifications(user_id)
     
     if not notifications:
         st.info("📝 No notifications yet. You'll receive notifications when someone invites you to cupping sessions!")

@@ -145,23 +145,23 @@ class UserDatabase:
         return self.coffee_bag_manager.get_user_bag_stats(user_id)
     
     # Cupper Invitation methods - delegate to CupperInvitationManager
-    def create_cupping_invitation(self, session_data: Dict, inviter_id: str, inviter_name: str, invitee_emails: List[str]) -> bool:
+    def create_cupping_invitation(self, session_data: Dict, inviter_id: str, inviter_name: str, invitee_usernames: List[str]) -> bool:
         """Create a cupping invitation"""
         try:
-            invitation_id = self.invitation_manager.create_invitation(session_data, inviter_id, inviter_name, invitee_emails)
+            invitation_id = self.invitation_manager.create_invitation(session_data, inviter_id, inviter_name, invitee_usernames)
             return invitation_id is not None
         except Exception as e:
             st.error(f"Error creating invitation: {e}")
             return False
     
-    def get_user_invitations(self, user_email: str) -> List[Dict]:
+    def get_user_invitations(self, user_id: str) -> List[Dict]:
         """Get invitations for a user"""
-        return self.invitation_manager.get_user_invitations(user_email)
+        return self.invitation_manager.get_user_invitations(user_id)
     
-    def respond_to_invitation(self, invitation_id: str, user_email: str, response: str, user_name: str) -> bool:
+    def respond_to_invitation(self, invitation_id: str, user_id: str, response: str, user_name: str) -> bool:
         """Respond to an invitation"""
-        return self.invitation_manager.respond_to_invitation(invitation_id, user_email, response, user_name)
+        return self.invitation_manager.respond_to_invitation(invitation_id, user_id, response, user_name)
     
-    def submit_collaborative_evaluation(self, invitation_id: str, user_email: str, user_name: str, evaluation_data: Dict) -> bool:
+    def submit_collaborative_evaluation(self, invitation_id: str, user_id: str, user_name: str, evaluation_data: Dict) -> bool:
         """Submit evaluation for collaborative session"""
-        return self.invitation_manager.submit_collaborative_evaluation(invitation_id, user_email, user_name, evaluation_data)
+        return self.invitation_manager.submit_collaborative_evaluation(invitation_id, user_id, user_name, evaluation_data)

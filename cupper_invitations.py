@@ -14,8 +14,8 @@ class CupperInvitationManager:
     def __init__(self):
         self.db = get_firestore_db()
     
-    def create_invitation(self, session_data: Dict, inviter_id: str, inviter_name: str, invitee_emails: List[str]) -> Optional[str]:
-        """Create a cupping session invitation"""
+    def create_invitation(self, session_data: Dict, inviter_id: str, inviter_name: str, invitee_usernames: List[str]) -> Optional[str]:
+        """Create a cupping session invitation using registered usernames"""
         try:
             if not self.db:
                 st.error("❌ Database connection not available")
@@ -23,12 +23,32 @@ class CupperInvitationManager:
             
             invitation_id = str(uuid.uuid4())
             
+            # Convert usernames to user IDs and validate they exist
+            invitee_user_data = []
+            for username in invitee_usernames:
+                user_ref = self.db.collection('users').where('username', '==', username.strip()).limit(1)
+                user_docs = list(user_ref.stream())
+                
+                if user_docs:
+                    user_data = user_docs[0].to_dict()
+                    invitee_user_data.append({
+                        'userId': user_docs[0].id,
+                        'username': user_data.get('username'),
+                        'email': user_data.get('email')
+                    })
+                else:
+                    st.warning(f"⚠️ Username '{username}' not found in the app")
+            
+            if not invitee_user_data:
+                st.error("❌ No valid usernames found")
+                return None
+            
             # Prepare invitation data
             invitation_record = {
                 'invitationId': invitation_id,
                 'inviterId': inviter_id,
                 'inviterName': inviter_name,
-                'inviteeEmails': invitee_emails,
+                'inviteeUsers': invitee_user_data,  # Store user data instead of just emails
                 'sessionData': session_data,
                 'status': 'pending',  # pending, accepted, declined, completed
                 'createdAt': datetime.now(),
@@ -41,8 +61,8 @@ class CupperInvitationManager:
             self.db.collection('cuppingInvitations').document(invitation_id).set(invitation_record)
             
             # Create notifications for each invitee
-            for email in invitee_emails:
-                self._create_notification(invitation_id, email, inviter_name, session_data)
+            for user_data in invitee_user_data:
+                self._create_notification_for_user(invitation_id, user_data, inviter_name, session_data)
             
             return invitation_id
             
@@ -50,15 +70,17 @@ class CupperInvitationManager:
             st.error(f"❌ Error creating invitation: {str(e)}")
             return None
     
-    def _create_notification(self, invitation_id: str, invitee_email: str, inviter_name: str, session_data: Dict):
-        """Create notification for invited user"""
+    def _create_notification_for_user(self, invitation_id: str, user_data: Dict, inviter_name: str, session_data: Dict):
+        """Create notification for invited registered user"""
         try:
             notification_id = str(uuid.uuid4())
             
             notification_data = {
                 'notificationId': notification_id,
                 'invitationId': invitation_id,
-                'recipientEmail': invitee_email,
+                'recipientUserId': user_data.get('userId'),
+                'recipientUsername': user_data.get('username'),
+                'recipientEmail': user_data.get('email'),
                 'inviterName': inviter_name,
                 'coffeeName': session_data.get('coffee_name', 'Unknown Coffee'),
                 'sessionType': session_data.get('session_type', 'Quick Cupping'),
@@ -73,29 +95,36 @@ class CupperInvitationManager:
         except Exception as e:
             st.error(f"Error creating notification: {e}")
     
-    def get_user_invitations(self, user_email: str) -> List[Dict]:
-        """Get invitations for a user by email"""
+    def get_user_invitations(self, user_id: str) -> List[Dict]:
+        """Get invitations for a user by user ID - these show in THEIR own dashboard"""
         try:
             if not self.db:
                 return []
             
-            # Get invitations where user is invitee
+            # Get all invitations and filter in Python to find ones for this user
             invitations_ref = self.db.collection('cuppingInvitations')
-            query = invitations_ref.where('inviteeEmails', 'array_contains', user_email)
+            docs = invitations_ref.stream()
             
-            docs = query.stream()
-            invitations = []
+            user_invitations = []
             
             for doc in docs:
                 invitation = doc.to_dict()
-                # Only include non-expired invitations
-                if invitation.get('expiresAt') and invitation['expiresAt'] > datetime.now():
-                    invitations.append(invitation)
+                
+                # Check if this user is in the inviteeUsers list
+                invitee_users = invitation.get('inviteeUsers', [])
+                for invitee in invitee_users:
+                    if invitee.get('userId') == user_id:
+                        # Only include non-expired invitations
+                        if invitation.get('expiresAt') and invitation['expiresAt'] > datetime.now():
+                            # Add flag to indicate this user should see this invitation in their dashboard
+                            invitation['isForCurrentUser'] = True
+                            user_invitations.append(invitation)
+                        break
             
             # Sort by creation date
-            invitations.sort(key=lambda x: x.get('createdAt', datetime.now()), reverse=True)
+            user_invitations.sort(key=lambda x: x.get('createdAt', datetime.now()), reverse=True)
             
-            return invitations
+            return user_invitations
             
         except Exception as e:
             st.error(f"Error getting user invitations: {e}")
@@ -126,7 +155,7 @@ class CupperInvitationManager:
             st.error(f"Error getting sent invitations: {e}")
             return []
     
-    def respond_to_invitation(self, invitation_id: str, user_email: str, response: str, user_name: str) -> bool:
+    def respond_to_invitation(self, invitation_id: str, user_id: str, response: str, user_name: str) -> bool:
         """Respond to a cupping invitation (accept/decline)"""
         try:
             if not self.db:
@@ -141,9 +170,9 @@ class CupperInvitationManager:
             
             invitation_data = invitation.to_dict()
             
-            # Update responses
+            # Update responses using user_id as key
             responses = invitation_data.get('responses', {})
-            responses[user_email] = {
+            responses[user_id] = {
                 'response': response,
                 'userName': user_name,
                 'respondedAt': datetime.now()
@@ -158,7 +187,7 @@ class CupperInvitationManager:
             st.error(f"Error responding to invitation: {e}")
             return False
     
-    def submit_collaborative_evaluation(self, invitation_id: str, user_email: str, user_name: str, evaluation_data: Dict) -> bool:
+    def submit_collaborative_evaluation(self, invitation_id: str, user_id: str, user_name: str, evaluation_data: Dict) -> bool:
         """Submit cupping evaluation for a collaborative session"""
         try:
             if not self.db:
@@ -173,9 +202,9 @@ class CupperInvitationManager:
             
             invitation_data = invitation.to_dict()
             
-            # Update participant evaluations
+            # Update participant evaluations using user_id as key
             evaluations = invitation_data.get('participantEvaluations', {})
-            evaluations[user_email] = {
+            evaluations[user_id] = {
                 'userName': user_name,
                 'evaluation': evaluation_data,
                 'submittedAt': datetime.now()
@@ -207,14 +236,14 @@ class CupperInvitationManager:
             st.error(f"Error getting invitation details: {e}")
             return None
     
-    def get_user_notifications(self, user_email: str) -> List[Dict]:
+    def get_user_notifications(self, user_id: str) -> List[Dict]:
         """Get notifications for a user"""
         try:
             if not self.db:
                 return []
             
             notifications_ref = self.db.collection('notifications')
-            query = notifications_ref.where('recipientEmail', '==', user_email)
+            query = notifications_ref.where('recipientUserId', '==', user_id)
             
             docs = query.stream()
             notifications = []

@@ -2,6 +2,7 @@ import streamlit as st
 from auth import AuthManager
 from coffee_shops import get_coffee_shop_manager
 from coffee_bags import get_coffee_bag_manager
+from cupper_invitations import get_cupper_invitation_manager
 from firebase import upload_image_to_storage
 import datetime
 
