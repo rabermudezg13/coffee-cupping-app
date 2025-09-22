@@ -18,24 +18,40 @@ class UserDatabase:
         """Initialize Firestore connection"""
         if not firebase_admin._apps:
             try:
-                # Check if .env file exists
-                if not os.path.exists('.env'):
-                    st.error("❌ File .env not found. Please create it from .env.example")
-                    st.info("Run: cp .env.example .env and fill in your Firebase credentials")
+                # Check if running in Streamlit Cloud (secrets) or locally (.env file)
+                if hasattr(st, 'secrets') and 'FIREBASE_PROJECT_ID' in st.secrets:
+                    # Running in Streamlit Cloud - use secrets
+                    firebase_config = {
+                        "type": st.secrets["FIREBASE_TYPE"],
+                        "project_id": st.secrets["FIREBASE_PROJECT_ID"],
+                        "private_key_id": st.secrets["FIREBASE_PRIVATE_KEY_ID"],
+                        "private_key": st.secrets["FIREBASE_PRIVATE_KEY"].replace('\\n', '\n'),
+                        "client_email": st.secrets["FIREBASE_CLIENT_EMAIL"],
+                        "client_id": st.secrets["FIREBASE_CLIENT_ID"],
+                        "auth_uri": st.secrets["FIREBASE_AUTH_URI"],
+                        "token_uri": st.secrets["FIREBASE_TOKEN_URI"],
+                        "auth_provider_x509_cert_url": st.secrets["FIREBASE_AUTH_PROVIDER_X509_CERT_URL"],
+                        "client_x509_cert_url": st.secrets["FIREBASE_CLIENT_X509_CERT_URL"]
+                    }
+                elif os.path.exists('.env'):
+                    # Running locally - use .env file
+                    firebase_config = {
+                        "type": os.getenv("FIREBASE_TYPE"),
+                        "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+                        "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+                        "private_key": os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n'),
+                        "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+                        "client_id": os.getenv("FIREBASE_CLIENT_ID"),
+                        "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
+                        "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
+                        "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
+                        "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
+                    }
+                else:
+                    st.error("❌ Firebase configuration not found")
+                    st.info("For local development: create .env file from .env.example")
+                    st.info("For Streamlit Cloud: configure secrets in app settings")
                     return None
-                
-                firebase_config = {
-                    "type": os.getenv("FIREBASE_TYPE"),
-                    "project_id": os.getenv("FIREBASE_PROJECT_ID"),
-                    "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
-                    "private_key": os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n'),
-                    "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
-                    "client_id": os.getenv("FIREBASE_CLIENT_ID"),
-                    "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
-                    "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
-                    "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
-                    "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
-                }
                 
                 # Check for missing required fields
                 required_fields = ["project_id", "private_key", "client_email"]
