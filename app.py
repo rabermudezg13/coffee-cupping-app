@@ -334,26 +334,44 @@ def show_my_cuppings(auth_manager):
 
 def show_professional_cupping(auth_manager):
     """Catación profesional completa"""
-    try:
-        from cupping_components import CuppingSession
+    st.markdown("#### 🏆 Sistema de Catación Profesional SCA")
+    st.markdown("*Evaluación completa con múltiples catadores y tazas*")
+    
+    st.info("🚧 **Sistema de catación profesional en desarrollo**")
+    st.markdown("""
+    **Próximas características:**
+    - ✅ Rueda de sabores interactiva
+    - ✅ Evaluación multi-catador (hasta 8 catadores)  
+    - ✅ Sistema de puntuación SCA completo
+    - ✅ Gráficos y analytics avanzados
+    
+    **Por ahora, usa la Catación Rápida que tiene todas las funciones esenciales.**
+    """)
+    
+    # Formulario básico de catación profesional
+    with st.form("professional_cupping_preview"):
+        st.subheader("⚙️ Configuración de Catación")
         
-        st.markdown("#### 🏆 Sistema de Catación Profesional SCA")
-        st.markdown("*Evaluación completa con múltiples catadores y tazas*")
+        col1, col2 = st.columns(2)
         
-        if not st.session_state.db_manager.db:
-            st.error("❌ Conexión a base de datos requerida para cataciones profesionales")
-            return
+        with col1:
+            coffee_name = st.text_input("Nombre del Café *")
+            origin = st.text_input("Origen *") 
+            variety = st.text_input("Variedad")
+            process_method = st.selectbox("Método de Proceso", [
+                "Lavado", "Natural", "Honey", "Pulped Natural", "Otro"
+            ])
+            
+        with col2:
+            farm = st.text_input("Finca")
+            altitude = st.number_input("Altitud (msnm)", min_value=0, max_value=3000, step=50)
+            num_cuppers = st.number_input("Número de Catadores", min_value=1, max_value=8, value=1)
+            num_cups = st.number_input("Número de Tazas", min_value=1, max_value=5, value=3)
         
-        cupping_session = CuppingSession(st.session_state.db_manager)
-        cupping_session.render_complete_session()
+        st.info(f"📊 Se evaluarán {num_cups} tazas por {num_cuppers} catador(es) = {num_cups * num_cuppers} evaluaciones totales")
         
-    except ImportError as e:
-        st.error("❌ Sistema de catación profesional temporalmente no disponible")
-        st.info("Las dependencias se están instalando. Por favor, usa la Catación Rápida mientras tanto.")
-        st.code(f"Error técnico: {e}")
-    except Exception as e:
-        st.error(f"❌ Error cargando sistema de catación: {e}")
-        st.info("Por favor, usa la Catación Rápida mientras se soluciona este problema.")
+        if st.form_submit_button("🚧 Disponible Próximamente", disabled=True):
+            st.warning("Esta función estará disponible en la próxima actualización.")
 
 def show_quick_cupping(auth_manager):
     """Catación rápida simplificada"""
@@ -430,14 +448,8 @@ def show_cupping_results(auth_manager):
         # Cataciones rápidas
         my_cuppings = st.session_state.db_manager.get_user_cuppings(current_user['user_id'])
         
-        # Cataciones profesionales
+        # Cataciones profesionales (próximamente)
         professional_sessions = []
-        try:
-            sessions_ref = st.session_state.db_manager.db.collection('cupping_sessions')
-            sessions_query = sessions_ref.where('user_id', '==', current_user['user_id'])
-            professional_sessions = [doc.to_dict() for doc in sessions_query.stream()]
-        except Exception as e:
-            st.warning("⚠️ Cataciones profesionales temporalmente no disponibles")
         
         if not my_cuppings and not professional_sessions:
             st.info("📝 Aún no tienes cataciones guardadas. ¡Crea tu primera catación!")
@@ -476,11 +488,14 @@ def show_cupping_results(auth_manager):
                 st.info("No tienes cataciones rápidas guardadas")
         
         with result_tabs[1]:
-            if professional_sessions:
-                for session in professional_sessions:
-                    render_professional_session_card(session)
-            else:
-                st.info("No tienes cataciones profesionales guardadas")
+            st.info("🚧 Cataciones profesionales disponibles próximamente")
+            st.markdown("""
+            **Próximas características:**
+            - 📊 Análisis comparativo entre catadores
+            - 📈 Gráficos de consistencia entre tazas  
+            - 🎯 Resultados de rueda de sabores
+            - 📋 Reportes detallados SCA
+            """)
                 
     except Exception as e:
         st.error(f"Error al cargar resultados: {e}")
@@ -524,84 +539,6 @@ def render_cupping_card(cupping: dict, show_edit: bool = False):
         
         st.markdown("---")
 
-def render_professional_session_card(session: dict):
-    """Renderizar tarjeta de sesión profesional"""
-    coffee_info = session.get('coffee_info', {})
-    evaluations = session.get('evaluations', {})
-    
-    # Calcular puntuación promedio
-    all_scores = []
-    for cupper, cups in evaluations.items():
-        for cup_id, evaluation in cups.items():
-            if evaluation and 'final_score' in evaluation:
-                all_scores.append(evaluation['final_score'])
-    
-    avg_score = sum(all_scores) / len(all_scores) if all_scores else 0
-    
-    with st.container():
-        st.markdown(f"""
-        <div style="background: white; padding: 1.5rem; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: 1rem 0; border-left: 4px solid var(--coffee-brown);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-                <div>
-                    <h3 style="margin: 0; color: var(--coffee-brown);">🏆 {coffee_info.get('coffee_name', 'Catación Profesional')}</h3>
-                    <p style="margin: 5px 0; color: #666; font-size: 14px;">
-                        📍 {coffee_info.get('origin', 'N/A')} • 
-                        👥 {len(session.get('cuppers', []))} catador(es) • 
-                        🏺 {session.get('num_cups', 0)} tazas •
-                        📅 {session.get('created_at', 'N/A')}
-                    </p>
-                </div>
-                <div style="text-align: right;">
-                    <div style="background: var(--coffee-brown); color: white; padding: 5px 10px; border-radius: 15px; font-weight: bold;">
-                        {avg_score:.1f}/100
-                    </div>
-                </div>
-            </div>
-            
-            <div style="margin: 10px 0;">
-                <strong>Variedad:</strong> {coffee_info.get('variety', 'N/A')} • 
-                <strong>Proceso:</strong> {coffee_info.get('process_method', 'N/A')} • 
-                <strong>Altitud:</strong> {coffee_info.get('altitude', 'N/A')} msnm
-            </div>
-            
-            <div style="margin: 10px 0;">
-                <strong>Sabores:</strong> {', '.join(session.get('selected_flavors', [])[:5])}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        with st.expander("Ver Detalles Completos"):
-            # Mostrar detalles de la evaluación
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("Información del Café")
-                for key, value in coffee_info.items():
-                    if value:
-                        st.write(f"**{key.replace('_', ' ').title()}:** {value}")
-            
-            with col2:
-                st.subheader("Parámetros de Preparación")
-                brewing_params = session.get('brewing_params', {})
-                for key, value in brewing_params.items():
-                    if value:
-                        st.write(f"**{key.replace('_', ' ').title()}:** {value}")
-            
-            # Resultados por catador
-            st.subheader("Resultados por Catador")
-            for cupper, cups in evaluations.items():
-                st.markdown(f"**{cupper}:**")
-                cupper_scores = []
-                for cup_id, evaluation in cups.items():
-                    if evaluation and 'final_score' in evaluation:
-                        cupper_scores.append(evaluation['final_score'])
-                        st.write(f"  - {cup_id.replace('_', ' ').title()}: {evaluation['final_score']:.1f}")
-                
-                if cupper_scores:
-                    avg = sum(cupper_scores) / len(cupper_scores)
-                    st.write(f"  - **Promedio:** {avg:.1f}")
-        
-        st.markdown("---")
 
 def show_settings(auth_manager):
     """Show user settings"""
