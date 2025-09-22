@@ -238,10 +238,10 @@ def show_dashboard(auth_manager):
 
 def show_my_cuppings(auth_manager):
     """Show user's cuppings"""
-    st.markdown("### ☕ Mis Cataciones de Café")
+    st.markdown("### ☕ Coffee Cuppings")
     
-    # Tabs para diferentes tipos de catación
-    tab1, tab2, tab3 = st.tabs(["🏆 Catación Profesional", "⚡ Catación Rápida", "📊 Mis Resultados"])
+    # Tabs for different cupping types
+    tab1, tab2, tab3 = st.tabs(["🏆 Professional Cupping", "⚡ Quick Cupping", "📊 My Results"])
     
     with tab1:
         show_professional_cupping(auth_manager)
@@ -253,32 +253,32 @@ def show_my_cuppings(auth_manager):
         show_cupping_results(auth_manager)
 
 def show_professional_cupping(auth_manager):
-    """Sistema de catación profesional"""
+    """Professional cupping system"""
     try:
         from cupping_components import CuppingSession
         
-        st.markdown("#### 🏆 Sistema de Catación Profesional SCA")
-        st.markdown("*Evaluación completa con múltiples catadores y tazas*")
+        st.markdown("#### 🏆 SCA Professional Cupping System")
+        st.markdown("*Complete evaluation with multiple cuppers and cups*")
         
         if not st.session_state.db_manager.db:
-            st.error("❌ Conexión a base de datos requerida")
+            st.error("❌ Database connection required")
             return
         
         cupping_session = CuppingSession(st.session_state.db_manager)
         cupping_session.render_complete_session()
         
     except ImportError as e:
-        st.warning("⚠️ Instalando dependencias del sistema profesional...")
-        st.info("📝 **Mientras tanto, usa la Catación Rápida**")
-        st.code(f"Cargando: {e}")
+        st.warning("⚠️ Installing professional system dependencies...")
+        st.info("📝 **Meanwhile, please use Quick Cupping**")
+        st.code(f"Loading: {e}")
     except Exception as e:
         st.error(f"❌ Error: {e}")
-        st.info("📝 Usa la Catación Rápida mientras se soluciona.")
+        st.info("📝 Please use Quick Cupping while this is resolved.")
 
 def show_quick_cupping(auth_manager):
-    """Catación rápida"""
-    st.markdown("#### ⚡ Catación Rápida")
-    st.success("✅ Sistema básico funcionando!")
+    """Quick cupping evaluation"""
+    st.markdown("#### ⚡ Quick Cupping")
+    st.success("✅ Basic system working!")
     
     with st.form("quick_cupping_form"):
         col1, col2 = st.columns(2)
@@ -337,63 +337,63 @@ def show_quick_cupping(auth_manager):
                 st.error("❌ Please fill in required fields")
 
 def show_cupping_results(auth_manager):
-    """Mostrar resultados de cataciones"""
-    st.markdown("#### 📊 Mis Resultados de Catación")
+    """Show cupping results"""
+    st.markdown("#### 📊 My Cupping Results")
     
     current_user = auth_manager.get_current_user()
     
     try:
-        # Obtener cataciones rápidas
+        # Get quick cuppings
         my_cuppings = st.session_state.db_manager.get_user_cuppings(current_user['user_id'])
         
         if not my_cuppings:
-            st.info("📝 Aún no tienes cataciones guardadas. ¡Crea tu primera catación!")
+            st.info("📝 No cuppings saved yet. Create your first cupping!")
             return
         
-        # Estadísticas básicas
+        # Basic statistics
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric("Total Cataciones", len(my_cuppings))
+            st.metric("Total Cuppings", len(my_cuppings))
         
         with col2:
             if my_cuppings:
                 avg_score = sum(c.get('overall_score', 0) for c in my_cuppings) / len(my_cuppings)
-                st.metric("Puntuación Promedio", f"{avg_score:.1f}")
+                st.metric("Average Score", f"{avg_score:.1f}")
             else:
-                st.metric("Puntuación Promedio", "N/A")
+                st.metric("Average Score", "N/A")
         
         with col3:
             unique_origins = set()
             for cupping in my_cuppings:
                 if cupping.get('origin'):
                     unique_origins.add(cupping['origin'])
-            st.metric("Orígenes Únicos", len(unique_origins))
+            st.metric("Unique Origins", len(unique_origins))
         
-        # Mostrar cataciones
-        st.subheader("📋 Historial de Cataciones")
+        # Show cuppings
+        st.subheader("📋 Cupping History")
         for cupping in my_cuppings:
-            with st.expander(f"☕ {cupping.get('coffee_name', 'Sin nombre')} - {cupping.get('overall_score', 0)}/100"):
+            with st.expander(f"☕ {cupping.get('coffee_name', 'Unnamed')} - {cupping.get('overall_score', 0)}/100"):
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.write(f"**Origen:** {cupping.get('origin', 'N/A')}")
-                    st.write(f"**Tostador:** {cupping.get('roaster', 'N/A')}")
-                    st.write(f"**Proceso:** {cupping.get('processing_method', 'N/A')}")
+                    st.write(f"**Origin:** {cupping.get('origin', 'N/A')}")
+                    st.write(f"**Roaster:** {cupping.get('roaster', 'N/A')}")
+                    st.write(f"**Process:** {cupping.get('processing_method', 'N/A')}")
                 
                 with col2:
                     st.write(f"**Aroma:** {cupping.get('aroma', 0)}/10")
-                    st.write(f"**Sabor:** {cupping.get('flavor', 0)}/10")
-                    st.write(f"**Acidez:** {cupping.get('acidity', 0)}/10")
-                    st.write(f"**Cuerpo:** {cupping.get('body', 0)}/10")
+                    st.write(f"**Flavor:** {cupping.get('flavor', 0)}/10")
+                    st.write(f"**Acidity:** {cupping.get('acidity', 0)}/10")
+                    st.write(f"**Body:** {cupping.get('body', 0)}/10")
                 
                 if cupping.get('flavor_notes'):
-                    st.write(f"**Sabores:** {cupping.get('flavor_notes')}")
+                    st.write(f"**Flavors:** {cupping.get('flavor_notes')}")
                 if cupping.get('notes'):
-                    st.write(f"**Notas:** {cupping.get('notes')}")
+                    st.write(f"**Notes:** {cupping.get('notes')}")
                 
     except Exception as e:
-        st.error(f"Error al cargar resultados: {e}")
+        st.error(f"Error loading results: {e}")
 
 def show_settings(auth_manager):
     """Show user settings"""
