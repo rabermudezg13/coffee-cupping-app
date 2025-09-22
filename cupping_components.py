@@ -15,8 +15,8 @@ class CuppingWheel:
                 "color": "#FF6B6B",
                 "subcategories": {
                     "Cítricos": ["Limón", "Lima", "Naranja", "Toronja", "Bergamota"],
-                    "Frutas del Bosque": ["Arándano", "Frambuesa", "Mora", "Fresa", "Cereza"],
-                    "Frutas de Hueso": ["Durazno", "Albaricoque", "Ciruela", "Cereza"],
+                    "Frutas del Bosque": ["Arándano", "Frambuesa", "Mora", "Fresa", "Cereza Dulce"],
+                    "Frutas de Hueso": ["Durazno", "Albaricoque", "Ciruela", "Cereza Ácida"],
                     "Tropicales": ["Piña", "Mango", "Papaya", "Coco", "Maracuyá"]
                 }
             },
@@ -24,9 +24,9 @@ class CuppingWheel:
                 "color": "#4ECDC4",
                 "subcategories": {
                     "Chocolate": ["Chocolate Negro", "Chocolate con Leche", "Cacao", "Chocolate Blanco"],
-                    "Vainilla": ["Vainilla", "Caramelo", "Miel", "Melaza"],
+                    "Vainilla": ["Vainilla", "Caramelo Líquido", "Miel", "Melaza"],
                     "Azúcares": ["Azúcar Morena", "Jarabe de Arce", "Azúcar Blanca"],
-                    "Dulces": ["Caramelo", "Toffee", "Butterscotch", "Marshmallow"]
+                    "Dulces": ["Caramelo Sólido", "Toffee", "Butterscotch", "Marshmallow"]
                 }
             },
             "Florales": {
@@ -81,7 +81,7 @@ class CuppingWheel:
                     with cols[j % 2]:
                         st.markdown(f"**{subcat}:**")
                         for flavor in flavors:
-                            if st.checkbox(flavor, key=f"flavor_{category}_{flavor}"):
+                            if st.checkbox(flavor, key=f"flavor_{category}_{subcat}_{flavor}"):
                                 selected_flavors.append(flavor)
         
         return selected_flavors
