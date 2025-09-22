@@ -397,16 +397,238 @@ def show_dashboard(auth_manager):
 
 def show_my_cuppings(auth_manager):
     """Show user's cuppings"""
-    st.markdown("### ☕ My Coffee Cuppings")
+    st.markdown("### ☕ Mis Cataciones de Café")
     
-    st.info("🚧 Cupping management coming soon! This is where you'll add, edit, and view your coffee cuppings.")
+    # Tabs para diferentes tipos de catación
+    tab1, tab2, tab3 = st.tabs(["🏆 Catación Profesional", "⚡ Catación Rápida", "📊 Mis Resultados"])
     
-    # Placeholder for future cupping functionality
-    with st.expander("➕ Add New Cupping"):
-        st.markdown("Cupping form will be implemented here")
-        st.text_input("Coffee Name", placeholder="Ethiopian Yirgacheffe")
-        st.slider("Overall Score", 0, 100, 85)
-        st.text_area("Tasting Notes", placeholder="Floral, citrus, bright acidity...")
+    with tab1:
+        show_professional_cupping(auth_manager)
+    
+    with tab2:
+        show_quick_cupping(auth_manager)
+    
+    with tab3:
+        show_cupping_results(auth_manager)
+
+def show_professional_cupping(auth_manager):
+    """Catación profesional completa"""
+    from cupping_components import CuppingSession
+    
+    st.markdown("#### 🏆 Sistema de Catación Profesional SCA")
+    st.markdown("*Evaluación completa con múltiples catadores y tazas*")
+    
+    if not st.session_state.db_manager.db:
+        st.error("❌ Conexión a base de datos requerida para cataciones profesionales")
+        return
+    
+    cupping_session = CuppingSession(st.session_state.db_manager)
+    cupping_session.render_complete_session()
+
+def show_quick_cupping(auth_manager):
+    """Catación rápida simplificada"""
+    st.markdown("#### ⚡ Catación Rápida")
+    st.markdown("*Evaluación simple y rápida para uso diario*")
+    
+    with st.form("quick_cupping_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            coffee_name = st.text_input("Nombre del Café *")
+            origin = st.text_input("Origen *")
+            roaster = st.text_input("Tostador")
+            processing_method = st.selectbox("Método de Proceso", 
+                ["Lavado", "Natural", "Honey", "Pulped Natural", "Otro"])
+        
+        with col2:
+            overall_score = st.slider("Puntuación General", 0, 100, 80)
+            aroma = st.slider("Aroma", 0, 10, 7)
+            flavor = st.slider("Sabor", 0, 10, 7)
+            acidity = st.slider("Acidez", 0, 10, 7)
+            body = st.slider("Cuerpo", 0, 10, 7)
+        
+        flavor_notes = st.text_area("Notas de Sabor", 
+            placeholder="chocolate, citrus, floral...")
+        notes = st.text_area("Notas Adicionales")
+        
+        col3, col4 = st.columns(2)
+        with col3:
+            is_public = st.checkbox("Hacer pública esta catación", value=True)
+        with col4:
+            post_as_anonymous = st.checkbox("Publicar como Anónimo")
+        
+        uploaded_file = st.file_uploader("Subir Foto (opcional)", 
+            type=['png', 'jpg', 'jpeg'])
+        
+        submit = st.form_submit_button("💾 Guardar Catación", use_container_width=True)
+        
+        if submit:
+            if coffee_name and origin:
+                cupping_data = {
+                    'coffee_name': coffee_name,
+                    'origin': origin,
+                    'roaster': roaster,
+                    'processing_method': processing_method,
+                    'overall_score': overall_score,
+                    'aroma': aroma,
+                    'flavor': flavor,
+                    'acidity': acidity,
+                    'body': body,
+                    'flavor_notes': flavor_notes,
+                    'notes': notes,
+                    'is_public': is_public,
+                    'post_as_anonymous': post_as_anonymous
+                }
+                
+                with st.spinner("Guardando catación..."):
+                    if st.session_state.db_manager.add_cupping(cupping_data, uploaded_file):
+                        st.success("🎉 Catación guardada exitosamente!")
+                        st.balloons()
+                    else:
+                        st.error("❌ Error al guardar la catación")
+            else:
+                st.error("❌ Por favor llena los campos requeridos")
+
+def show_cupping_results(auth_manager):
+    """Mostrar resultados de cataciones guardadas"""
+    st.markdown("#### 📊 Mis Resultados de Catación")
+    
+    current_user = auth_manager.get_current_user()
+    
+    # Obtener cataciones del usuario
+    try:
+        # Cataciones rápidas
+        my_cuppings = st.session_state.db_manager.get_user_cuppings(current_user['user_id'])
+        
+        # Cataciones profesionales
+        sessions_ref = st.session_state.db_manager.db.collection('cupping_sessions')
+        sessions_query = sessions_ref.where('user_id', '==', current_user['user_id'])
+        professional_sessions = [doc.to_dict() for doc in sessions_query.stream()]
+        
+        if not my_cuppings and not professional_sessions:
+            st.info("📝 Aún no tienes cataciones guardadas. ¡Crea tu primera catación!")
+            return
+        
+        # Mostrar estadísticas generales
+        total_cuppings = len(my_cuppings) + len(professional_sessions)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Cataciones", total_cuppings)
+        
+        with col2:
+            if my_cuppings:
+                avg_score = sum(c.get('overall_score', 0) for c in my_cuppings) / len(my_cuppings)
+                st.metric("Puntuación Promedio", f"{avg_score:.1f}")
+            else:
+                st.metric("Puntuación Promedio", "N/A")
+        
+        with col3:
+            unique_origins = set()
+            for cupping in my_cuppings:
+                if cupping.get('origin'):
+                    unique_origins.add(cupping['origin'])
+            st.metric("Orígenes Únicos", len(unique_origins))
+        
+        # Tabs para diferentes tipos de resultados
+        result_tabs = st.tabs(["⚡ Cataciones Rápidas", "🏆 Cataciones Profesionales"])
+        
+        with result_tabs[0]:
+            if my_cuppings:
+                for cupping in my_cuppings:
+                    st.session_state.ui_components.render_cupping_card(cupping, show_edit=True)
+            else:
+                st.info("No tienes cataciones rápidas guardadas")
+        
+        with result_tabs[1]:
+            if professional_sessions:
+                for session in professional_sessions:
+                    render_professional_session_card(session)
+            else:
+                st.info("No tienes cataciones profesionales guardadas")
+                
+    except Exception as e:
+        st.error(f"Error al cargar resultados: {e}")
+
+def render_professional_session_card(session: dict):
+    """Renderizar tarjeta de sesión profesional"""
+    coffee_info = session.get('coffee_info', {})
+    evaluations = session.get('evaluations', {})
+    
+    # Calcular puntuación promedio
+    all_scores = []
+    for cupper, cups in evaluations.items():
+        for cup_id, evaluation in cups.items():
+            if evaluation and 'final_score' in evaluation:
+                all_scores.append(evaluation['final_score'])
+    
+    avg_score = sum(all_scores) / len(all_scores) if all_scores else 0
+    
+    with st.container():
+        st.markdown(f"""
+        <div class="cupping-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                    <h3 style="margin: 0; color: var(--coffee-brown);">🏆 {coffee_info.get('coffee_name', 'Catación Profesional')}</h3>
+                    <p style="margin: 5px 0; color: #666; font-size: 14px;">
+                        📍 {coffee_info.get('origin', 'N/A')} • 
+                        👥 {len(session.get('cuppers', []))} catador(es) • 
+                        🏺 {session.get('num_cups', 0)} tazas •
+                        📅 {session.get('created_at', 'N/A')}
+                    </p>
+                </div>
+                <div style="text-align: right;">
+                    <div style="background: var(--coffee-brown); color: white; padding: 5px 10px; border-radius: 15px; font-weight: bold;">
+                        {avg_score:.1f}/100
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <strong>Variedad:</strong> {coffee_info.get('variety', 'N/A')} • 
+                <strong>Proceso:</strong> {coffee_info.get('process_method', 'N/A')} • 
+                <strong>Altitud:</strong> {coffee_info.get('altitude', 'N/A')} msnm
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <strong>Sabores:</strong> {', '.join(session.get('selected_flavors', [])[:5])}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("Ver Detalles Completos"):
+            # Mostrar detalles de la evaluación
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Información del Café")
+                for key, value in coffee_info.items():
+                    if value:
+                        st.write(f"**{key.replace('_', ' ').title()}:** {value}")
+            
+            with col2:
+                st.subheader("Parámetros de Preparación")
+                brewing_params = session.get('brewing_params', {})
+                for key, value in brewing_params.items():
+                    if value:
+                        st.write(f"**{key.replace('_', ' ').title()}:** {value}")
+            
+            # Resultados por catador
+            st.subheader("Resultados por Catador")
+            for cupper, cups in evaluations.items():
+                st.markdown(f"**{cupper}:**")
+                cupper_scores = []
+                for cup_id, evaluation in cups.items():
+                    if evaluation and 'final_score' in evaluation:
+                        cupper_scores.append(evaluation['final_score'])
+                        st.write(f"  - {cup_id.replace('_', ' ').title()}: {evaluation['final_score']:.1f}")
+                
+                if cupper_scores:
+                    avg = sum(cupper_scores) / len(cupper_scores)
+                    st.write(f"  - **Promedio:** {avg:.1f}")
+        
+        st.markdown("---")
 
 def show_settings(auth_manager):
     """Show user settings"""
