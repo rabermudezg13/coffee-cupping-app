@@ -7,6 +7,7 @@ from typing import Dict, Optional, List
 from firebase import get_firestore_db
 from cuppings import get_cupping_manager
 from coffee_shops import get_coffee_shop_manager
+from coffee_bags import get_coffee_bag_manager
 
 
 class UserDatabase:
@@ -16,6 +17,7 @@ class UserDatabase:
         self.db = get_firestore_db()
         self.cupping_manager = get_cupping_manager()
         self.coffee_shop_manager = get_coffee_shop_manager()
+        self.coffee_bag_manager = get_coffee_bag_manager()
     
     # Legacy user methods - delegate to AuthManager (imported in main apps)
     def create_user(self, email: str, username: str, password_hash: str) -> bool:
@@ -117,3 +119,25 @@ class UserDatabase:
     def get_coffee_shop_review_stats(self, user_id: str) -> Dict:
         """Get coffee shop review statistics for a user"""
         return self.coffee_shop_manager.get_user_review_stats(user_id)
+    
+    # Coffee Bag methods - delegate to CoffeeBagManager
+    def add_coffee_bag(self, bag_data: Dict, user_id: str, user_name: str) -> bool:
+        """Add a new coffee bag record"""
+        try:
+            bag_id = self.coffee_bag_manager.create_coffee_bag(bag_data, user_id, user_name)
+            return bag_id is not None
+        except Exception as e:
+            st.error(f"Error adding coffee bag: {e}")
+            return False
+    
+    def get_user_coffee_bags(self, user_id: str) -> List[Dict]:
+        """Get all coffee bags for a user"""
+        return self.coffee_bag_manager.get_user_coffee_bags(user_id)
+    
+    def get_public_coffee_bags(self, limit: int = 20) -> List[Dict]:
+        """Get public coffee bags"""
+        return self.coffee_bag_manager.get_public_coffee_bags(limit)
+    
+    def get_coffee_bag_stats(self, user_id: str) -> Dict:
+        """Get coffee bag statistics for a user"""
+        return self.coffee_bag_manager.get_user_bag_stats(user_id)

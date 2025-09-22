@@ -1,6 +1,7 @@
 import streamlit as st
 from auth import AuthManager
 from coffee_shops import get_coffee_shop_manager
+from coffee_bags import get_coffee_bag_manager
 from firebase import upload_image_to_storage
 import datetime
 
@@ -191,7 +192,7 @@ def show_main_app(auth_manager):
     """, unsafe_allow_html=True)
     
     # Main app tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "⚙️ Settings"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "📦 Coffee Bags", "⚙️ Settings"])
     
     with tab1:
         show_dashboard(auth_manager)
@@ -203,6 +204,9 @@ def show_main_app(auth_manager):
         show_coffee_shops(auth_manager)
     
     with tab4:
+        show_coffee_bags(auth_manager)
+    
+    with tab5:
         show_settings(auth_manager)
 
 def show_user_sidebar(auth_manager):
@@ -668,6 +672,91 @@ def show_coffee_shops(auth_manager):
                     st.image(review['photoUrl'], caption=f"Photo from {review.get('shopName', 'Coffee Shop')}", width=200)
     else:
         st.info("No public reviews yet. Be the first to share your coffee shop experience!")
+
+def show_coffee_bags(auth_manager):
+    """Show Coffee Bags tracking section - simplified version"""
+    st.markdown("### 📦 Coffee Bags")
+    
+    current_user = auth_manager.get_current_user()
+    if not current_user:
+        st.error("❌ User not found")
+        return
+    
+    user_id = current_user['user_id']
+    coffee_bag_manager = get_coffee_bag_manager()
+    
+    st.markdown("#### Add New Coffee Bag")
+    
+    # Simplified Coffee Bag Form
+    with st.form("coffee_bag_form"):
+        # Basic Info
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            coffee_name = st.text_input("Coffee Name *", placeholder="e.g., Guatemala Huehuetenango")
+            origin = st.text_input("Origin *", placeholder="e.g., Guatemala")
+            farm = st.text_input("Farm/Producer", placeholder="e.g., Finca El Injerto")
+            roast_level = st.selectbox("Roast Level *", ["Light", "Medium", "Dark"])
+        
+        with col2:
+            grind_type = st.selectbox("Grind Type *", ["Whole Bean", "Ground"])
+            preparation_method = st.selectbox("Preparation *", ["Espresso", "V60", "French Press", "Other"])
+            cost = st.number_input("Cost ($)", min_value=0.0, step=0.01, format="%.2f")
+            rating = st.slider("Rating", 1, 5, 4)
+        
+        # Experience
+        col3, col4 = st.columns(2)
+        with col3:
+            would_recommend = st.checkbox("Would recommend", value=True)
+        with col4:
+            would_buy_again = st.checkbox("Would buy again", value=True)
+        
+        # Photo Upload
+        uploaded_photo = st.file_uploader("Upload photo (optional)", type=['png', 'jpg', 'jpeg'])
+        
+        # Submit
+        submit_bag = st.form_submit_button("📦 Save Coffee Bag", use_container_width=True)
+        
+        if submit_bag:
+            if coffee_name and origin and roast_level and grind_type and preparation_method:
+                # Handle photo upload
+                photo_url = ""
+                if uploaded_photo:
+                    with st.spinner("Uploading photo..."):
+                        success, url = upload_image_to_storage(uploaded_photo, "coffee_bag_photos")
+                        if success and url:
+                            photo_url = url
+                            st.success("📸 Photo uploaded successfully!")
+                
+                # Prepare coffee bag data
+                user_name = auth_manager.get_display_name()
+                bag_data = {
+                    'coffeeName': coffee_name,
+                    'origin': origin,
+                    'farm': farm or "",
+                    'roastLevel': roast_level,
+                    'grindType': grind_type,
+                    'preparationMethod': preparation_method,
+                    'cost': cost,
+                    'rating': rating,
+                    'wouldRecommend': would_recommend,
+                    'wouldBuyAgain': would_buy_again,
+                    'photoUrl': photo_url,
+                    'isPublic': True,
+                    'isAnonymous': False
+                }
+                
+                # Save coffee bag
+                with st.spinner("Saving coffee bag..."):
+                    bag_id = coffee_bag_manager.create_coffee_bag(bag_data, user_id, user_name)
+                    
+                    if bag_id:
+                        st.success("🎉 Coffee bag saved successfully!")
+                        st.balloons()
+                    else:
+                        st.error("❌ Failed to save coffee bag")
+            else:
+                st.error("❌ Please fill in all required fields")
 
 def show_footer():
     """Show footer with copyright"""

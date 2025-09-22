@@ -1,6 +1,7 @@
 import streamlit as st
 from auth import AuthManager
 from coffee_shops import get_coffee_shop_manager
+from coffee_bags import get_coffee_bag_manager
 from firebase import upload_image_to_storage
 import datetime
 
@@ -284,7 +285,7 @@ def show_main_app(auth_manager):
     """, unsafe_allow_html=True)
     
     # Main app tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "⚙️ Settings"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 Dashboard", "☕ My Cuppings", "🏪 Coffee Shops", "📦 Coffee Bags", "⚙️ Settings"])
     
     with tab1:
         show_dashboard(auth_manager)
@@ -296,6 +297,9 @@ def show_main_app(auth_manager):
         show_coffee_shops(auth_manager)
     
     with tab4:
+        show_coffee_bags(auth_manager)
+    
+    with tab5:
         show_settings(auth_manager)
 
 def show_user_sidebar(auth_manager):
@@ -330,6 +334,10 @@ def show_dashboard(auth_manager):
         coffee_shop_manager = get_coffee_shop_manager()
         review_stats = coffee_shop_manager.get_user_review_stats(user_id)
         
+        # Get coffee bag stats
+        coffee_bag_manager = get_coffee_bag_manager()
+        bag_stats = coffee_bag_manager.get_user_bag_stats(user_id)
+        
         # Display metrics in two rows
         st.markdown("#### ☕ Coffee Cupping Stats")
         col1, col2, col3 = st.columns(3)
@@ -357,10 +365,24 @@ def show_dashboard(auth_manager):
         with col6:
             st.metric("Shops Reviewed", str(review_stats['shops_reviewed']))
         
+        st.markdown("#### 📦 Coffee Bags Stats")
+        col7, col8, col9 = st.columns(3)
+        
+        with col7:
+            st.metric("Coffee Bags", str(bag_stats['total_bags']))
+        
+        with col8:
+            avg_bag_rating = bag_stats['average_rating']
+            st.metric("Avg Bag Rating", f"{avg_bag_rating}/5 ⭐" if avg_bag_rating > 0 else "N/A")
+        
+        with col9:
+            total_spent = bag_stats['total_spent']
+            st.metric("Total Spent", f"${total_spent}" if total_spent > 0 else "$0")
+        
         # Show encouraging messages
-        total_activities = cupping_stats['total_cuppings'] + review_stats['total_reviews']
+        total_activities = cupping_stats['total_cuppings'] + review_stats['total_reviews'] + bag_stats['total_bags']
         if total_activities == 0:
-            st.info("🌱 Start your coffee journey! Add your first cupping or shop review.")
+            st.info("🌱 Start your coffee journey! Add your first cupping, shop review, or coffee bag.")
         else:
             st.success(f"🎉 Amazing! You've recorded {total_activities} coffee experience{'s' if total_activities != 1 else ''}!")
     else:
@@ -714,6 +736,200 @@ def show_coffee_shops(auth_manager):
                     st.image(review['photoUrl'], caption=f"Photo from {review.get('shopName', 'Coffee Shop')}", width=200)
     else:
         st.info("No public reviews yet. Be the first to share your coffee shop experience!")
+
+def show_coffee_bags(auth_manager):
+    """Show Coffee Bags tracking section"""
+    st.markdown("### 📦 Coffee Bags")
+    
+    current_user = auth_manager.get_current_user()
+    if not current_user:
+        st.error("❌ User not found")
+        return
+    
+    user_id = current_user['user_id']
+    coffee_bag_manager = get_coffee_bag_manager()
+    
+    # Show existing coffee bags first
+    user_bags = coffee_bag_manager.get_user_coffee_bags(user_id)
+    
+    if user_bags:
+        st.markdown(f"#### Your Coffee Collection ({len(user_bags)})")
+        for bag in user_bags[:3]:  # Show last 3 bags
+            with st.expander(f"📦 {bag.get('coffeeName', 'Unknown Coffee')} - {bag.get('rating', 0)}⭐"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Origin:** {bag.get('origin', 'N/A')}")
+                    st.write(f"**Farm:** {bag.get('farm', 'N/A')}")
+                    st.write(f"**Roast Level:** {bag.get('roastLevel', 'N/A')}")
+                    st.write(f"**Grind:** {bag.get('grindType', 'N/A')}")
+                with col2:
+                    st.write(f"**Preparation:** {bag.get('preparationMethod', 'N/A')}")
+                    st.write(f"**Cost:** ${bag.get('cost', 0)}")
+                    st.write(f"**Roast Date:** {bag.get('roastDate', 'N/A')}")
+                    st.write(f"**Rating:** {bag.get('rating', 0)}/5 ⭐")
+                
+                if bag.get('wouldRecommend'):
+                    st.write("✅ **Would Recommend**")
+                else:
+                    st.write("❌ **Would Not Recommend**")
+                
+                if bag.get('wouldBuyAgain'):
+                    st.write("🔄 **Would Buy Again**")
+                
+                if bag.get('photoUrl'):
+                    st.image(bag['photoUrl'], caption="Coffee Bag Photo", width=200)
+                
+                created_at = bag.get('createdAt')
+                if created_at:
+                    st.caption(f"Added: {created_at.strftime('%Y-%m-%d %H:%M') if hasattr(created_at, 'strftime') else str(created_at)}")
+    
+    st.markdown("#### Add New Coffee Bag")
+    
+    # Coffee Bag Tracking Form
+    with st.form("coffee_bag_form"):
+        # Basic Coffee Info
+        st.markdown("##### ☕ Coffee Information")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            coffee_name = st.text_input("Coffee Name *", placeholder="e.g., Guatemala Huehuetenango")
+            origin = st.text_input("Origin *", placeholder="e.g., Guatemala")
+            farm = st.text_input("Farm/Producer", placeholder="e.g., Finca El Injerto")
+            roast_level = st.selectbox(
+                "Roast Level *",
+                ["Light", "Light-Medium", "Medium", "Medium-Dark", "Dark", "French Roast"]
+            )
+        
+        with col2:
+            grind_type = st.selectbox(
+                "Grind Type *",
+                ["Whole Bean", "Coarse", "Medium-Coarse", "Medium", "Medium-Fine", "Fine", "Extra Fine"]
+            )
+            
+            preparation_method = st.selectbox(
+                "Intended Preparation *",
+                ["Espresso", "V60", "Chemex", "Aeropress", "French Press", "Cold Brew", "Moka Pot", "Drip Coffee", "Turkish", "Other"]
+            )
+            
+            cost = st.number_input("Cost ($)", min_value=0.0, step=0.01, format="%.2f")
+            
+            roast_date = st.date_input("Roast Date", value=None, help="When was this coffee roasted?")
+        
+        # Rating and Experience
+        st.markdown("##### ⭐ Your Experience")
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            rating = st.slider("Overall Rating", 1, 5, 4, help="Rate this coffee overall")
+            would_recommend = st.checkbox("Would you recommend this coffee?", value=True)
+        
+        with col4:
+            would_buy_again = st.checkbox("Would you buy this again?", value=True)
+            
+        # Additional Notes
+        notes = st.text_area("Notes", placeholder="Any additional thoughts about this coffee...")
+        
+        # Photo Upload
+        st.markdown("##### 📸 Photo")
+        uploaded_photo = st.file_uploader(
+            "Upload a photo of the coffee bag (optional)",
+            type=['png', 'jpg', 'jpeg'],
+            help="Upload a photo of the coffee bag or packaging"
+        )
+        
+        # Privacy Settings
+        st.markdown("##### 🔒 Privacy")
+        col5, col6 = st.columns(2)
+        with col5:
+            is_public = st.checkbox("Make this public in community", value=True)
+        with col6:
+            is_anonymous = st.checkbox("Post anonymously", value=False)
+        
+        # Submit Button
+        submit_bag = st.form_submit_button("📦 Save Coffee Bag", use_container_width=True)
+        
+        if submit_bag:
+            if coffee_name and origin and roast_level and grind_type and preparation_method:
+                # Handle photo upload
+                photo_url = ""
+                if uploaded_photo:
+                    with st.spinner("Uploading photo..."):
+                        success, url = upload_image_to_storage(uploaded_photo, "coffee_bag_photos")
+                        if success and url:
+                            photo_url = url
+                            st.success("📸 Photo uploaded successfully!")
+                        else:
+                            st.warning("⚠️ Photo upload failed, but bag will be saved without photo")
+                
+                # Determine user name
+                user_name = "Anonymous" if is_anonymous else auth_manager.get_display_name()
+                
+                # Prepare coffee bag data
+                bag_data = {
+                    'coffeeName': coffee_name,
+                    'origin': origin,
+                    'farm': farm or "",
+                    'roastLevel': roast_level,
+                    'grindType': grind_type,
+                    'preparationMethod': preparation_method,
+                    'cost': cost,
+                    'roastDate': roast_date.isoformat() if roast_date else "",
+                    'rating': rating,
+                    'wouldRecommend': would_recommend,
+                    'wouldBuyAgain': would_buy_again,
+                    'notes': notes or "",
+                    'photoUrl': photo_url,
+                    'isPublic': is_public,
+                    'isAnonymous': is_anonymous
+                }
+                
+                # Save coffee bag
+                with st.spinner("Saving coffee bag..."):
+                    bag_id = coffee_bag_manager.create_coffee_bag(bag_data, user_id, user_name)
+                    
+                    if bag_id:
+                        st.success("🎉 Coffee bag saved successfully!")
+                        st.balloons()
+                        st.info("Your coffee has been added to your collection!")
+                    else:
+                        st.error("❌ Failed to save coffee bag")
+            else:
+                st.error("❌ Please fill in all required fields: Coffee Name, Origin, Roast Level, Grind Type, and Preparation Method")
+    
+    # Show public coffee bags section
+    st.markdown("#### Community Coffee Collection")
+    public_bags = coffee_bag_manager.get_public_coffee_bags(limit=5)
+    
+    if public_bags:
+        for bag in public_bags:
+            with st.expander(f"📦 {bag.get('coffeeName', 'Unknown')} from {bag.get('origin', 'Unknown')} - {bag.get('rating', 0)}⭐ by {bag.get('trackerName', 'Anonymous')}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Origin:** {bag.get('origin', 'N/A')}")
+                    st.write(f"**Farm:** {bag.get('farm', 'N/A')}")
+                    st.write(f"**Roast Level:** {bag.get('roastLevel', 'N/A')}")
+                    st.write(f"**Cost:** ${bag.get('cost', 0)}")
+                with col2:
+                    st.write(f"**Grind:** {bag.get('grindType', 'N/A')}")
+                    st.write(f"**Preparation:** {bag.get('preparationMethod', 'N/A')}")
+                    st.write(f"**Rating:** {bag.get('rating', 0)}/5 ⭐")
+                
+                recommendations = []
+                if bag.get('wouldRecommend'):
+                    recommendations.append("✅ Recommended")
+                if bag.get('wouldBuyAgain'):
+                    recommendations.append("🔄 Would buy again")
+                
+                if recommendations:
+                    st.write(f"**Community feedback:** {' • '.join(recommendations)}")
+                
+                if bag.get('notes'):
+                    st.write(f"**Notes:** {bag['notes']}")
+                
+                if bag.get('photoUrl'):
+                    st.image(bag['photoUrl'], caption=f"Coffee bag from {bag.get('trackerName', 'Community')}", width=200)
+    else:
+        st.info("No public coffee bags yet. Be the first to share your coffee collection!")
 
 def show_footer():
     """Show footer with copyright"""
