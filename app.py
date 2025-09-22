@@ -459,20 +459,52 @@ def show_send_invitation(invitation_manager, user_id: str, user_name: str):
     st.info("💡 Invited cuppers will see the invitation in THEIR own dashboard when they log in to the app. Each person evaluates from their own device/account.")
     
     with st.form("send_invitation_form"):
-        # Coffee information
-        st.markdown("##### Coffee Details")
-        col1, col2 = st.columns(2)
+        # Session type selection
+        st.markdown("##### Session Type")
+        session_type = st.selectbox("What would you like to share?", 
+            ["Coffee Cupping", "Coffee Bag Review", "Coffee Shop Review"])
         
-        with col1:
-            coffee_name = st.text_input("Coffee Name *", placeholder="e.g., Ethiopia Yirgacheffe")
-            origin = st.text_input("Origin *", placeholder="e.g., Ethiopia")
-            roaster = st.text_input("Roaster", placeholder="e.g., Blue Bottle")
+        # Dynamic form based on session type
+        if session_type == "Coffee Cupping":
+            st.markdown("##### Coffee Details")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                coffee_name = st.text_input("Coffee Name *", placeholder="e.g., Ethiopia Yirgacheffe")
+                origin = st.text_input("Origin *", placeholder="e.g., Ethiopia")
+                roaster = st.text_input("Roaster", placeholder="e.g., Blue Bottle")
+            
+            with col2:
+                processing_method = st.selectbox("Processing Method", 
+                    ["Washed", "Natural", "Honey", "Pulped Natural", "Other"])
         
-        with col2:
-            processing_method = st.selectbox("Processing Method", 
-                ["Washed", "Natural", "Honey", "Pulped Natural", "Other"])
-            session_type = st.selectbox("Session Type", 
-                ["Quick Cupping", "Professional Cupping", "Blind Cupping"])
+        elif session_type == "Coffee Bag Review":
+            st.markdown("##### Coffee Bag Details")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                coffee_name = st.text_input("Coffee Name *", placeholder="e.g., Guatemala Huehuetenango")
+                origin = st.text_input("Origin *", placeholder="e.g., Guatemala")
+                farm = st.text_input("Farm/Producer", placeholder="e.g., Finca El Injerto")
+            
+            with col2:
+                roast_level = st.selectbox("Roast Level", ["Light", "Medium", "Dark"])
+                grind_type = st.selectbox("Grind Type", ["Whole Bean", "Ground"])
+                cost = st.number_input("Cost ($)", min_value=0.0, step=0.01, format="%.2f")
+        
+        elif session_type == "Coffee Shop Review":
+            st.markdown("##### Coffee Shop Details")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                shop_name = st.text_input("Coffee Shop Name *", placeholder="e.g., Blue Bottle Coffee")
+                coffee_name = st.text_input("Coffee Served", placeholder="e.g., Single Origin Espresso")
+                barista_name = st.text_input("Barista Name", placeholder="e.g., Alex")
+            
+            with col2:
+                preparation_method = st.selectbox("Preparation Method", 
+                    ["Espresso", "V60", "Chemex", "Aeropress", "Other"])
+                location = st.text_input("Location", placeholder="e.g., Downtown")
         
         # Invitation details
         st.markdown("##### Invitation Details")
@@ -485,7 +517,44 @@ def show_send_invitation(invitation_manager, user_id: str, user_name: str):
         submit_invitation = st.form_submit_button("📧 Send Invitations", use_container_width=True)
         
         if submit_invitation:
-            if coffee_name and origin and invitee_usernames:
+            # Validate based on session type
+            valid = False
+            session_data = {'session_type': session_type}
+            
+            if session_type == "Coffee Cupping":
+                if coffee_name and origin and invitee_usernames:
+                    valid = True
+                    session_data.update({
+                        'coffee_name': coffee_name,
+                        'origin': origin,
+                        'roaster': roaster,
+                        'processing_method': processing_method
+                    })
+            
+            elif session_type == "Coffee Bag Review":
+                if coffee_name and origin and invitee_usernames:
+                    valid = True
+                    session_data.update({
+                        'coffee_name': coffee_name,
+                        'origin': origin,
+                        'farm': farm,
+                        'roast_level': roast_level,
+                        'grind_type': grind_type,
+                        'cost': cost
+                    })
+            
+            elif session_type == "Coffee Shop Review":
+                if shop_name and invitee_usernames:
+                    valid = True
+                    session_data.update({
+                        'shop_name': shop_name,
+                        'coffee_name': coffee_name,
+                        'barista_name': barista_name,
+                        'preparation_method': preparation_method,
+                        'location': location
+                    })
+            
+            if valid and invitee_usernames:
                 # Parse usernames
                 username_list = [username.strip() for username in invitee_usernames.replace('\n', ',').split(',') if username.strip()]
                 
@@ -493,26 +562,22 @@ def show_send_invitation(invitation_manager, user_id: str, user_name: str):
                     st.error("❌ Please enter at least one valid username")
                     return
                 
-                # Prepare session data
-                session_data = {
-                    'coffee_name': coffee_name,
-                    'origin': origin,
-                    'roaster': roaster,
-                    'processing_method': processing_method,
-                    'session_type': session_type
-                }
-                
                 with st.spinner("Sending invitations..."):
                     invitation_id = invitation_manager.create_invitation(session_data, user_id, user_name, username_list)
                     
                     if invitation_id:
-                        st.success(f"🎉 Invitations sent successfully to {len(username_list)} people!")
+                        st.success(f"🎉 {session_type} invitations sent successfully to {len(username_list)} people!")
                         st.balloons()
-                        st.info(f"📧 Invited cuppers will see this invitation when they log in to their own accounts")
+                        st.info(f"📧 Invited users will see this {session_type.lower()} invitation when they log in to their own accounts")
                     else:
                         st.error("❌ Failed to send invitations")
             else:
-                st.error("❌ Please fill in required fields: Coffee Name, Origin, and Usernames")
+                required_fields = {
+                    "Coffee Cupping": "Coffee Name, Origin, and Usernames",
+                    "Coffee Bag Review": "Coffee Name, Origin, and Usernames", 
+                    "Coffee Shop Review": "Shop Name and Usernames"
+                }
+                st.error(f"❌ Please fill in required fields: {required_fields[session_type]}")
 
 def show_received_invitations(invitation_manager, user_id: str, user_name: str):
     """Show received cupping invitations"""

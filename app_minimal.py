@@ -770,18 +770,40 @@ def show_collaborative_cupping(auth_manager):
         st.info("💡 Invited cuppers will see the invitation in THEIR own dashboard.")
         
         with st.form("invite_form"):
-            coffee_name = st.text_input("Coffee Name *")
-            origin = st.text_input("Origin *")
+            session_type = st.selectbox("What to share?", ["Coffee Cupping", "Coffee Bag Review", "Coffee Shop Review"])
+            
+            if session_type == "Coffee Cupping":
+                coffee_name = st.text_input("Coffee Name *")
+                origin = st.text_input("Origin *")
+            elif session_type == "Coffee Bag Review":
+                coffee_name = st.text_input("Coffee Name *")
+                origin = st.text_input("Origin *")
+                roast_level = st.selectbox("Roast Level", ["Light", "Medium", "Dark"])
+            elif session_type == "Coffee Shop Review":
+                shop_name = st.text_input("Shop Name *")
+                coffee_name = st.text_input("Coffee Served")
+            
             usernames = st.text_area("Usernames to Invite *", placeholder="username1, username2")
             
             if st.form_submit_button("📧 Send Invitations"):
-                if coffee_name and origin and usernames:
-                    username_list = [u.strip() for u in usernames.split(',') if u.strip()]
-                    session_data = {'coffee_name': coffee_name, 'origin': origin, 'session_type': 'Quick Cupping'}
-                    
+                username_list = [u.strip() for u in usernames.split(',') if u.strip()]
+                valid = False
+                session_data = {'session_type': session_type}
+                
+                if session_type == "Coffee Cupping" and coffee_name and origin:
+                    valid = True
+                    session_data.update({'coffee_name': coffee_name, 'origin': origin})
+                elif session_type == "Coffee Bag Review" and coffee_name and origin:
+                    valid = True
+                    session_data.update({'coffee_name': coffee_name, 'origin': origin, 'roast_level': roast_level})
+                elif session_type == "Coffee Shop Review" and shop_name:
+                    valid = True
+                    session_data.update({'shop_name': shop_name, 'coffee_name': coffee_name})
+                
+                if valid and usernames and username_list:
                     invitation_id = invitation_manager.create_invitation(session_data, user_id, user_name, username_list)
                     if invitation_id:
-                        st.success(f"🎉 Invitations sent to {len(username_list)} people!")
+                        st.success(f"🎉 {session_type} invitations sent!")
                         st.balloons()
                     else:
                         st.error("❌ Failed to send invitations")
