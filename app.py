@@ -413,17 +413,26 @@ def show_my_cuppings(auth_manager):
 
 def show_professional_cupping(auth_manager):
     """Catación profesional completa"""
-    from cupping_components import CuppingSession
-    
-    st.markdown("#### 🏆 Sistema de Catación Profesional SCA")
-    st.markdown("*Evaluación completa con múltiples catadores y tazas*")
-    
-    if not st.session_state.db_manager.db:
-        st.error("❌ Conexión a base de datos requerida para cataciones profesionales")
-        return
-    
-    cupping_session = CuppingSession(st.session_state.db_manager)
-    cupping_session.render_complete_session()
+    try:
+        from cupping_components import CuppingSession
+        
+        st.markdown("#### 🏆 Sistema de Catación Profesional SCA")
+        st.markdown("*Evaluación completa con múltiples catadores y tazas*")
+        
+        if not st.session_state.db_manager.db:
+            st.error("❌ Conexión a base de datos requerida para cataciones profesionales")
+            return
+        
+        cupping_session = CuppingSession(st.session_state.db_manager)
+        cupping_session.render_complete_session()
+        
+    except ImportError as e:
+        st.error("❌ Sistema de catación profesional temporalmente no disponible")
+        st.info("Las dependencias se están instalando. Por favor, usa la Catación Rápida mientras tanto.")
+        st.code(f"Error técnico: {e}")
+    except Exception as e:
+        st.error(f"❌ Error cargando sistema de catación: {e}")
+        st.info("Por favor, usa la Catación Rápida mientras se soluciona este problema.")
 
 def show_quick_cupping(auth_manager):
     """Catación rápida simplificada"""
@@ -501,9 +510,13 @@ def show_cupping_results(auth_manager):
         my_cuppings = st.session_state.db_manager.get_user_cuppings(current_user['user_id'])
         
         # Cataciones profesionales
-        sessions_ref = st.session_state.db_manager.db.collection('cupping_sessions')
-        sessions_query = sessions_ref.where('user_id', '==', current_user['user_id'])
-        professional_sessions = [doc.to_dict() for doc in sessions_query.stream()]
+        professional_sessions = []
+        try:
+            sessions_ref = st.session_state.db_manager.db.collection('cupping_sessions')
+            sessions_query = sessions_ref.where('user_id', '==', current_user['user_id'])
+            professional_sessions = [doc.to_dict() for doc in sessions_query.stream()]
+        except Exception as e:
+            st.warning("⚠️ Cataciones profesionales temporalmente no disponibles")
         
         if not my_cuppings and not professional_sessions:
             st.info("📝 Aún no tienes cataciones guardadas. ¡Crea tu primera catación!")

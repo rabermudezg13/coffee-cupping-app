@@ -1,0 +1,5 @@
+# Minimal requirements that definitely work on Streamlit Cloud
+streamlit
+firebase-admin
+bcrypt
+python-dotenv
